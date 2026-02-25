@@ -1,0 +1,72 @@
+{
+  "ok": true,
+  "source": "official",
+  "updatedAt": "2026-02-25T14:56:35.949Z",
+  "items": [
+    {
+      "value": "13",
+      "label": "06%",
+      "annualRate": 6
+    },
+    {
+      "value": "10",
+      "label": "08%",
+      "annualRate": 8
+    },
+    {
+      "value": "3",
+      "label": "24%",
+      "annualRate": 24
+    },
+    {
+      "value": "4",
+      "label": "32%",
+      "annualRate": 32
+    },
+    {
+      "value": "5",
+      "label": "36%",
+      "annualRate": 36
+    },
+    {
+      "value": "9",
+      "label": "48%",
+      "annualRate": 48
+    },
+    {
+      "value": "11",
+      "label": "56%",
+      "annualRate": 56
+    },
+    {
+      "value": "6",
+      "label": "PACTADA",
+      "annualRate": null
+    },
+    {
+      "value": "8",
+      "label": "SIN INTERESES",
+      "annualRate": 0
+    },
+    {
+      "value": "2",
+      "label": "T. ACTIVA 30 DIAS BNA",
+      "annualRate": null
+    },
+    {
+      "value": "7",
+      "label": "T. ACTIVA 30 DIAS BNA X 1,5",
+      "annualRate": null
+    },
+    {
+      "value": "14",
+      "label": "T. ALIMENTOS ART.552 CCCN BCRA + T.A. BNA",
+      "annualRate": null
+    },
+    {
+      "value": "1",
+      "label": "T. PASIVA USO JUSTICIA BCRA",
+      "annualRate": null
+    }
+  ]
+}

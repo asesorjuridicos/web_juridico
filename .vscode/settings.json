@@ -1,0 +1,5 @@
+{
+  "edge-devtools.webhint": {
+    "no-inline-styles": "off"
+  }
+}
