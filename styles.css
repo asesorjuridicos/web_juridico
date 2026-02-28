@@ -499,6 +499,16 @@ ul, ol { list-style: none; }
   color: rgba(200,212,233,0.52);
 }
 
+.hero-calc-field input[type="date"] {
+  color-scheme: dark;
+}
+
+.hero-calc-field input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) brightness(2);
+  opacity: 1;
+  cursor: pointer;
+}
+
 .hero-calc-field input:focus,
 .hero-calc-field select:focus {
   border-color: rgba(212,175,55,0.8);
