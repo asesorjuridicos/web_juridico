@@ -11,6 +11,57 @@ const MAX_HONORARIOS_PERCENT = 100;
 // ===== FOOTER YEAR =====
 document.getElementById('currentYear').textContent = new Date().getFullYear();
 
+function formatIntegerAr(value) {
+  var amount = Number(value) || 0;
+  try {
+    return new Intl.NumberFormat('es-AR').format(amount);
+  } catch (_error) {
+    return String(amount);
+  }
+}
+
+function setVisitCounterText(text, isError) {
+  var counter = document.getElementById('visitCounterValue');
+  if (!counter) return;
+  counter.textContent = text;
+  counter.style.color = isError ? '#f1b4b4' : '';
+}
+
+function initVisitCounter() {
+  var counter = document.getElementById('visitCounterValue');
+  if (!counter) return;
+
+  if (window.location.protocol === 'file:') {
+    setVisitCounterText('Solo con servidor local', false);
+    return;
+  }
+
+  fetch('/api/visitas', {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Accept': 'application/json'
+    }
+  })
+    .then(function (res) {
+      return res
+        .json()
+        .catch(function () { return {}; })
+        .then(function (data) {
+          return { ok: res.ok, data: data || {} };
+        });
+    })
+    .then(function (result) {
+      if (!result.ok || result.data.ok === false) {
+        throw new Error('VISIT_COUNTER_FAILED');
+      }
+      setVisitCounterText(formatIntegerAr(result.data.totalVisits || 0), false);
+    })
+    .catch(function () {
+      setVisitCounterText('No disponible', true);
+    });
+}
+
 // ===== HEADER SCROLL =====
 const header = document.getElementById('header');
 const brandLogo = document.getElementById('brandLogo');
@@ -1335,6 +1386,7 @@ function renderExpressResult() {
 
 initDiagnosticTabs();
 initHeroCalculator();
+initVisitCounter();
 
 // ===== CONTACT FORM (OWN BACKEND SMTP) =====
 function showLocalServerRequiredStatus(btn, status) {

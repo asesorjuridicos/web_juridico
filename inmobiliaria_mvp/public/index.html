@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asesores Inmobiliario | Compra, venta y alquiler con respaldo real</title>
+  <meta
+    name="description"
+    content="Asesores Inmobiliario. Compra, venta, alquiler, tasaciones y seguimiento profesional en Saenz Pena, Resistencia y Chaco."
+  />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-header">
+      <div class="container header-row">
+        <a class="brand-mark" href="#inicio">
+          <span class="brand-mark-badge">AI</span>
+          <span>
+            <strong>Asesores Inmobiliario</strong>
+            <small>Compra, venta y alquiler con criterio</small>
+          </span>
+        </a>
+
+        <nav class="site-nav">
+          <a href="#destacadas">Destacadas</a>
+          <a href="#propiedades">Propiedades</a>
+          <a href="#servicios">Servicios</a>
+          <a href="#tasacion">Tasacion</a>
+          <a href="#contacto">Contacto</a>
+          <a class="nav-cta" href="/admin/">Admin</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="inicio">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Nueva base para asesoresinmobiliario.com.ar</p>
+            <h1>Propiedades bien presentadas, consultas ordenadas y control real en tus manos.</h1>
+            <p class="hero-text">
+              Este MVP ya queda listo para mostrar inmuebles, recibir consultas con filtro anti-spam
+              y administrar propiedades desde un panel simple sin depender del sistema viejo.
+            </p>
+
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="#propiedades">Explorar oportunidades</a>
+              <a class="btn btn-secondary" href="#tasacion">Pedir tasacion</a>
+            </div>
+
+            <div class="hero-metrics" id="heroMetrics">
+              <article>
+                <strong id="metricTotal">0</strong>
+                <span>propiedades activas</span>
+              </article>
+              <article>
+                <strong id="metricCities">0</strong>
+                <span>ciudades cubiertas</span>
+              </article>
+              <article>
+                <strong id="metricFeatured">0</strong>
+                <span>destacadas listas</span>
+              </article>
+            </div>
+          </div>
+
+          <aside class="hero-search">
+            <div class="search-card">
+              <p class="search-card-kicker">Buscador rapido</p>
+              <h2>Filtra por operacion, tipo y ciudad</h2>
+              <form id="filterForm" class="search-form">
+                <label>
+                  <span>Operacion</span>
+                  <select id="filterOperation" name="operation">
+                    <option value="">Todas</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Tipo</span>
+                  <select id="filterType" name="type">
+                    <option value="">Todos</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Ciudad</span>
+                  <select id="filterCity" name="city">
+                    <option value="">Todas</option>
+                  </select>
+                </label>
+                <label class="wide">
+                  <span>Busqueda libre</span>
+                  <input id="filterQuery" name="q" type="text" placeholder="Casa con patio, lote, galpon..." />
+                </label>
+                <button class="btn btn-primary wide" type="submit">Aplicar filtros</button>
+              </form>
+              <p class="search-footnote" id="resultsSummary">Preparando listado...</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="featured-strip" id="destacadas">
+        <div class="container section-head compact">
+          <div>
+            <p class="eyebrow">Seleccion curada</p>
+            <h2>Propiedades destacadas</h2>
+          </div>
+          <a class="text-link" href="#propiedades">Ver todo el inventario</a>
+        </div>
+        <div class="container property-grid featured-grid" id="featuredGrid"></div>
+      </section>
+
+      <section class="property-section" id="propiedades">
+        <div class="container section-head">
+          <div>
+            <p class="eyebrow">Inventario activo</p>
+            <h2>Propiedades listas para publicar con criterio comercial</h2>
+          </div>
+          <div class="pill-row">
+            <span class="pill">Compra</span>
+            <span class="pill">Venta</span>
+            <span class="pill">Alquiler</span>
+            <span class="pill">Tasaciones</span>
+          </div>
+        </div>
+        <div class="container property-grid" id="propertyGrid"></div>
+      </section>
+
+      <section class="service-section" id="servicios">
+        <div class="container section-head">
+          <div>
+            <p class="eyebrow">Servicio integral</p>
+            <h2>La inmobiliaria nueva tiene que vender y ordenar trabajo</h2>
+          </div>
+        </div>
+        <div class="container service-grid">
+          <article>
+            <span>01</span>
+            <h3>Captacion con posicionamiento serio</h3>
+            <p>Diseno orientado a propietarios que necesitan confianza antes de dejarte una operacion.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Consultas con menos ruido</h3>
+            <p>El backend ya trae control de frecuencia y honeypot para bajar el spam automatizado.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Panel para cargar sin depender de terceros</h3>
+            <p>Alta, edicion y baja de propiedades con inbox basico para revisar mensajes y marcar spam.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="valuation-section" id="tasacion">
+        <div class="container valuation-grid">
+          <div>
+            <p class="eyebrow">Tasacion y captacion</p>
+            <h2>Pide una tasacion y alimenta el pipeline del nuevo sitio</h2>
+            <p>
+              Este formulario usa la misma bandeja de consultas del admin. Sirve para captar ventas,
+              alquileres y futuros encargos.
+            </p>
+          </div>
+          <form id="valuationForm" class="panel-form">
+            <input type="hidden" name="source" value="tasacion" />
+            <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+            <label>
+              <span>Nombre</span>
+              <input name="name" type="text" placeholder="Tu nombre" required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input name="email" type="email" placeholder="nombre@correo.com" required />
+            </label>
+            <label>
+              <span>Telefono</span>
+              <input name="phone" type="text" placeholder="3644..." />
+            </label>
+            <label>
+              <span>Ciudad o zona</span>
+              <input name="city" type="text" placeholder="Saenz Pena, Resistencia..." />
+            </label>
+            <label class="wide">
+              <span>Descripcion del inmueble</span>
+              <textarea name="message" rows="5" placeholder="Casa, depto, lote, metros, estado, urgencia..." required></textarea>
+            </label>
+            <button class="btn btn-primary wide" type="submit">Solicitar tasacion</button>
+            <p class="form-status" id="valuationStatus"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="contact-section" id="contacto">
+        <div class="container contact-grid">
+          <div class="contact-copy">
+            <p class="eyebrow">Contacto comercial</p>
+            <h2>Convierte la visita en una consulta util</h2>
+            <p>
+              El formulario entra al panel admin con estado nuevo. Desde ahi puedes marcar leido,
+              respondido o spam sin perder el historial.
+            </p>
+            <a class="btn btn-secondary" href="https://wa.me/543644388960" target="_blank" rel="noopener noreferrer">Abrir WhatsApp</a>
+          </div>
+          <form id="contactForm" class="panel-form contact-form">
+            <input type="hidden" name="source" value="contacto" />
+            <input type="text" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+            <label>
+              <span>Nombre</span>
+              <input name="name" type="text" placeholder="Nombre y apellido" required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input name="email" type="email" placeholder="nombre@correo.com" required />
+            </label>
+            <label>
+              <span>Telefono</span>
+              <input name="phone" type="text" placeholder="3644..." />
+            </label>
+            <label>
+              <span>Ciudad</span>
+              <input name="city" type="text" placeholder="Saenz Pena, Resistencia..." />
+            </label>
+            <label class="wide">
+              <span>Consulta</span>
+              <textarea name="message" rows="5" placeholder="Quiero vender, alquilar, tasar o consultar una propiedad..." required></textarea>
+            </label>
+            <button class="btn btn-primary wide" type="submit">Enviar consulta</button>
+            <p class="form-status" id="contactStatus"></p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-row">
+        <div>
+          <strong>Asesores Inmobiliario</strong>
+          <p>MVP inicial con panel propio, consultas filtradas y estructura lista para crecer.</p>
+        </div>
+        <a href="/admin/">Ir al panel admin</a>
+      </div>
+    </footer>
+  </div>
+
+  <div class="property-modal" id="propertyModal" hidden>
+    <div class="property-modal-backdrop" data-close-modal></div>
+    <div class="property-modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="modal-close" type="button" aria-label="Cerrar" data-close-modal>&times;</button>
+      <div class="modal-visual" id="modalVisual"></div>
+      <div class="modal-body">
+        <p class="modal-code" id="modalCode"></p>
+        <h3 id="modalTitle"></h3>
+        <p class="modal-meta" id="modalMeta"></p>
+        <p class="modal-price" id="modalPrice"></p>
+        <p class="modal-description" id="modalDescription"></p>
+        <ul class="modal-amenities" id="modalAmenities"></ul>
+        <button class="btn btn-primary" id="modalContactButton" type="button">Consultar esta propiedad</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

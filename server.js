@@ -2,6 +2,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const { URL, URLSearchParams } = require('url');
 
@@ -11,7 +12,9 @@ const PORT = Number(process.env.PORT || 5500);
 const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const CACHE_FILE = path.join(DATA_DIR, 'chaco-rates-cache.json');
+const VISITS_FILE = path.join(DATA_DIR, 'visits.json');
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const VISIT_DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000;
 const OFFICIAL_HOST = 'www.justiciachaco.gov.ar';
 const OFFICIAL_CALC_PATH = '/sistemas/calcula_tasas/calculadora_v2/';
 const CONTACT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -27,6 +30,7 @@ const CONTACT_FROM_EMAIL = String(process.env.CONTACT_FROM_EMAIL || process.env.
 const CONTACT_SUBJECT_PREFIX = String(process.env.CONTACT_SUBJECT_PREFIX || '[Web Juridico]').trim();
 const contactRateBuckets = new Map();
 let smtpTransporterPromise = null;
+let visitsUpdateQueue = Promise.resolve();
 
 function loadEnvFromFile(filePath) {
   try {
@@ -556,6 +560,95 @@ function getClientIp(req) {
   return String(req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : 'unknown');
 }
 
+function createVisitorFingerprint(req) {
+  const ip = getClientIp(req);
+  const userAgent = String(req.headers['user-agent'] || '').trim().slice(0, 512);
+  return crypto.createHash('sha256').update(`${ip}|${userAgent}`).digest('hex');
+}
+
+function loadVisitsFile() {
+  try {
+    if (!fs.existsSync(VISITS_FILE)) {
+      return {
+        total: 0,
+        updatedAt: null,
+        recentVisitors: {}
+      };
+    }
+
+    const raw = fs.readFileSync(VISITS_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    const total = Number(parsed && parsed.total);
+    const updatedAt = parsed && parsed.updatedAt ? new Date(parsed.updatedAt).toISOString() : null;
+    const recentVisitors = parsed && parsed.recentVisitors && typeof parsed.recentVisitors === 'object'
+      ? parsed.recentVisitors
+      : {};
+
+    return {
+      total: Number.isFinite(total) && total >= 0 ? Math.floor(total) : 0,
+      updatedAt,
+      recentVisitors
+    };
+  } catch (_error) {
+    return {
+      total: 0,
+      updatedAt: null,
+      recentVisitors: {}
+    };
+  }
+}
+
+function cleanupRecentVisitors(recentVisitors, nowMs) {
+  const cleaned = {};
+
+  for (const [fingerprint, lastSeen] of Object.entries(recentVisitors || {})) {
+    const stamp = Number(lastSeen);
+    if (!Number.isFinite(stamp)) continue;
+    if (nowMs - stamp >= VISIT_DEDUPE_WINDOW_MS) continue;
+    cleaned[fingerprint] = stamp;
+  }
+
+  return cleaned;
+}
+
+function saveVisitsFile(payload) {
+  ensureDataDir();
+  fs.writeFileSync(VISITS_FILE, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+async function updateVisitStats(req) {
+  const task = visitsUpdateQueue.then(() => {
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const fingerprint = createVisitorFingerprint(req);
+    const stats = loadVisitsFile();
+    const recentVisitors = cleanupRecentVisitors(stats.recentVisitors, nowMs);
+    const lastSeen = Number(recentVisitors[fingerprint]);
+    const shouldIncrement = !Number.isFinite(lastSeen) || (nowMs - lastSeen) >= VISIT_DEDUPE_WINDOW_MS;
+    const nextTotal = shouldIncrement ? stats.total + 1 : stats.total;
+
+    recentVisitors[fingerprint] = nowMs;
+
+    const payload = {
+      total: nextTotal,
+      updatedAt: nowIso,
+      recentVisitors
+    };
+
+    saveVisitsFile(payload);
+
+    return {
+      ok: true,
+      totalVisits: nextTotal,
+      updatedAt: nowIso,
+      countedVisit: shouldIncrement
+    };
+  });
+
+  visitsUpdateQueue = task.catch(() => {});
+  return task;
+}
+
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
 }
@@ -853,6 +946,19 @@ const server = http.createServer(async (req, res) => {
       ok: true,
       now: new Date().toISOString()
     });
+    return;
+  }
+
+  if ((pathname === '/api/visitas' || pathname === '/api/visitas/') && req.method === 'GET') {
+    try {
+      const payload = await updateVisitStats(req);
+      sendJson(res, 200, payload);
+    } catch (error) {
+      sendJson(res, 500, {
+        ok: false,
+        error: error && error.message ? error.message : 'VISITS_COUNTER_FAILED'
+      });
+    }
     return;
   }
 

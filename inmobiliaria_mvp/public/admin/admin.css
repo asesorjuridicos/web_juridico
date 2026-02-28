@@ -1,0 +1,274 @@
+:root {
+  --bg: #16191f;
+  --panel: #20252d;
+  --panel-soft: #272d36;
+  --ink: #f2f5f7;
+  --muted: #9aa4b0;
+  --line: rgba(255, 255, 255, 0.08);
+  --accent: #d39e3d;
+  --accent-2: #cd624b;
+  --danger: #d05a5a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Space Grotesk', sans-serif;
+  background:
+    radial-gradient(circle at top right, rgba(205, 98, 75, 0.25), transparent 20%),
+    radial-gradient(circle at bottom left, rgba(211, 158, 61, 0.16), transparent 18%),
+    var(--bg);
+  color: var(--ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.admin-shell {
+  width: min(1280px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.login-panel {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.login-card,
+.admin-card {
+  background: rgba(32, 37, 45, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 1.4rem;
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.5);
+}
+
+.login-card {
+  width: min(440px, 100%);
+  padding: 2rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.6rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.login-card h1,
+.dash-header h2,
+.card-head h3 {
+  margin: 0;
+  font-family: 'Fraunces', serif;
+}
+
+.login-card p,
+.dash-subtitle {
+  color: var(--muted);
+}
+
+.admin-form {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.admin-form label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.admin-form span {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.admin-form input,
+.admin-form textarea,
+.admin-form select,
+.admin-form button,
+.dash-actions a,
+.dash-actions button,
+.ghost-btn {
+  border-radius: 0.95rem;
+}
+
+.admin-form input,
+.admin-form textarea,
+.admin-form select {
+  border: 1px solid var(--line);
+  background: rgba(16, 20, 26, 0.9);
+  color: var(--ink);
+  padding: 0.88rem 1rem;
+}
+
+.admin-form button,
+.dash-actions button,
+.dash-actions a {
+  border: 0;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #111;
+  font-weight: 700;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  text-align: center;
+}
+
+.dashboard {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.dash-header,
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dash-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.stats-grid,
+.admin-grid,
+.property-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stat-card {
+  padding: 1rem 1.1rem;
+  background: var(--panel);
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 1.5rem;
+}
+
+.stat-card span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.admin-grid {
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+}
+
+.admin-card {
+  padding: 1.15rem;
+}
+
+.property-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.check input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.status {
+  margin: 0;
+  min-height: 1.2rem;
+  color: var(--muted);
+}
+
+.ghost-btn {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  padding: 0.7rem 0.95rem;
+  cursor: pointer;
+}
+
+.table-wrap {
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 0.78rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+td,
+th {
+  font-size: 0.9rem;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.row-actions button,
+.status-select {
+  border: 1px solid var(--line);
+  background: rgba(16, 20, 26, 0.8);
+  color: var(--ink);
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.8rem;
+  cursor: pointer;
+}
+
+.delete-btn {
+  color: #fff;
+  background: var(--danger);
+}
+
+.message-cell {
+  min-width: 260px;
+  color: var(--muted);
+}
+
+@media (max-width: 980px) {
+  .stats-grid,
+  .admin-grid,
+  .property-form {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-header,
+  .card-head {
+    align-items: start;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin | Asesores Inmobiliario</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/admin/admin.css" />
+</head>
+<body>
+  <main class="admin-shell">
+    <section class="login-panel" id="loginPanel">
+      <div class="login-card">
+        <p class="eyebrow">Panel inicial</p>
+        <h1>Admin inmobiliario</h1>
+        <p>Base propia para cargar propiedades y ordenar consultas sin depender del sistema viejo.</p>
+
+        <form id="loginForm" class="admin-form">
+          <label>
+            <span>Usuario</span>
+            <input name="username" type="text" placeholder="admin" required />
+          </label>
+          <label>
+            <span>Clave</span>
+            <input name="password" type="password" placeholder="********" required />
+          </label>
+          <button type="submit">Ingresar</button>
+          <p class="status" id="loginStatus"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="dashboard" id="dashboard" hidden>
+      <header class="dash-header">
+        <div>
+          <p class="eyebrow">Asesores Inmobiliario</p>
+          <h2>Panel operativo</h2>
+          <p class="dash-subtitle">Propiedades y bandeja de consultas del MVP.</p>
+        </div>
+        <div class="dash-actions">
+          <a href="/" target="_blank" rel="noopener noreferrer">Ver sitio</a>
+          <button id="logoutButton" type="button">Salir</button>
+        </div>
+      </header>
+
+      <section class="stats-grid" id="statsGrid"></section>
+
+      <section class="admin-grid">
+        <article class="admin-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Carga rapida</p>
+              <h3>Propiedades</h3>
+            </div>
+            <button id="resetPropertyForm" type="button" class="ghost-btn">Nueva ficha</button>
+          </div>
+
+          <form id="propertyForm" class="admin-form property-form">
+            <input type="hidden" name="id" />
+            <label>
+              <span>Codigo</span>
+              <input name="code" type="text" placeholder="AI-201" />
+            </label>
+            <label>
+              <span>Titulo</span>
+              <input name="title" type="text" placeholder="Casa con patio..." required />
+            </label>
+            <label>
+              <span>Operacion</span>
+              <select name="operation" required>
+                <option value="Venta">Venta</option>
+                <option value="Alquiler">Alquiler</option>
+              </select>
+            </label>
+            <label>
+              <span>Tipo</span>
+              <select name="type" required>
+                <option value="Casa">Casa</option>
+                <option value="Departamento">Departamento</option>
+                <option value="Lote">Lote</option>
+                <option value="Galpon">Galpon</option>
+                <option value="Quinta">Quinta</option>
+              </select>
+            </label>
+            <label>
+              <span>Ciudad</span>
+              <input name="city" type="text" placeholder="Saenz Pena" required />
+            </label>
+            <label>
+              <span>Zona</span>
+              <input name="zone" type="text" placeholder="Centro, barrio, ruta..." />
+            </label>
+            <label>
+              <span>Direccion</span>
+              <input name="address" type="text" placeholder="Calle..." />
+            </label>
+            <label>
+              <span>Precio</span>
+              <input name="price" type="number" min="0" step="0.01" required />
+            </label>
+            <label>
+              <span>Moneda</span>
+              <select name="currency">
+                <option value="USD">USD</option>
+                <option value="ARS">ARS</option>
+              </select>
+            </label>
+            <label>
+              <span>Dormitorios</span>
+              <input name="bedrooms" type="number" min="0" step="1" />
+            </label>
+            <label>
+              <span>Banos</span>
+              <input name="bathrooms" type="number" min="0" step="1" />
+            </label>
+            <label>
+              <span>Area m2</span>
+              <input name="area" type="number" min="0" step="1" />
+            </label>
+            <label>
+              <span>Tag comercial</span>
+              <input name="tag" type="text" placeholder="Apta credito, ingreso inmediato..." />
+            </label>
+            <label>
+              <span>Color visual</span>
+              <select name="accent">
+                <option value="sunrise">Sunrise</option>
+                <option value="forest">Forest</option>
+                <option value="desert">Desert</option>
+                <option value="ocean">Ocean</option>
+                <option value="graphite">Graphite</option>
+                <option value="plum">Plum</option>
+              </select>
+            </label>
+            <label class="wide">
+              <span>Resumen corto</span>
+              <textarea name="summary" rows="3" placeholder="Lo primero que debe vender el card..." required></textarea>
+            </label>
+            <label class="wide">
+              <span>Descripcion completa</span>
+              <textarea name="description" rows="5" placeholder="Detalle de ambientes, documentos, puntos fuertes..." required></textarea>
+            </label>
+            <label class="wide">
+              <span>Amenities (separados por coma)</span>
+              <input name="amenities" type="text" placeholder="Patio, quincho, balcon..." />
+            </label>
+            <label class="check">
+              <input name="featured" type="checkbox" />
+              <span>Destacada</span>
+            </label>
+            <label class="check">
+              <input name="status" type="checkbox" checked />
+              <span>Activa</span>
+            </label>
+            <button type="submit" class="wide">Guardar propiedad</button>
+            <p class="status wide" id="propertyStatus"></p>
+          </form>
+        </article>
+
+        <article class="admin-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Inventario</p>
+              <h3>Listado actual</h3>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Titulo</th>
+                  <th>Operacion</th>
+                  <th>Ciudad</th>
+                  <th>Precio</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="propertiesTableBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section class="admin-card">
+        <div class="card-head">
+          <div>
+            <p class="eyebrow">Inbox</p>
+            <h3>Consultas recibidas</h3>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Origen</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Telefono</th>
+                <th>Estado</th>
+                <th>Mensaje</th>
+              </tr>
+            </thead>
+            <tbody id="inquiriesTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="/admin/admin.js"></script>
+</body>
+</html>
