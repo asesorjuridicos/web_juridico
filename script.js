@@ -578,7 +578,44 @@ async function handleCalculatorSubmit(e) {
     // Iniciar animación (2 segundos para dar más dramatismo al cálculo oficial)
     animateCurrency('calcTotalResult', totalOfficial, 2000);
   } catch (error) {
-    renderCalculatorError((error && error.message) ? (error.message + ' Puede usar \"Personalizada (manual)\" como alternativa.') : 'Error al calcular con la fuente oficial.');
+    var canUseManualFallback = isFinite(annualRate) && annualRate >= 0;
+    if (canUseManualFallback) {
+      var interestFallback = principal * (annualRate / 100) * (days / 365);
+      var updatedFallback = principal + interestFallback;
+      var honorFallback = updatedFallback * (honorPct / 100);
+      var totalFallback = updatedFallback + honorFallback;
+      var honorRowFallback = '';
+      var rateFallbackLabel = isPactadaOfficial
+        ? (annualRate.toFixed(4).replace('.', ',') + '% (PACTADA manual)')
+        : (selectedRateLabel + ' (estimación manual)');
+
+      if (honorPct > 0) {
+        honorRowFallback = '<div class=\"hero-calc-result-row\"><span>Honorarios (' + honorPct.toFixed(2) + '%)</span><strong>' + formatCurrencyAr(honorFallback) + '</strong></div>';
+      }
+
+      result.classList.remove('error');
+      result.innerHTML =
+        '<div class=\"hero-calc-result-card\">' +
+          '<div class=\"hero-calc-result-row\"><span>Modo</span><strong>' + modeLabel + '</strong></div>' +
+          '<div class=\"hero-calc-result-row\"><span>Tasa aplicada</span><strong>' + rateFallbackLabel + '</strong></div>' +
+          '<div class=\"hero-calc-result-row\"><span>Días calculados</span><strong>' + days + '</strong></div>' +
+          '<div class=\"hero-calc-result-row\"><span>Capital base</span><strong>' + formatCurrencyAr(capital) + '</strong></div>' +
+          workerRows +
+          '<div class=\"hero-calc-result-row\"><span>Capital computado</span><strong>' + formatCurrencyAr(principal) + '</strong></div>' +
+          '<div class=\"hero-calc-result-row\"><span>Interés estimado</span><strong>' + formatCurrencyAr(interestFallback) + '</strong></div>' +
+          '<div class=\"hero-calc-result-row\"><span>Monto actualizado estimado</span><strong>' + formatCurrencyAr(updatedFallback) + '</strong></div>' +
+          honorRowFallback +
+          '<div class=\"hero-calc-result-total\"><span>Total estimado</span><span id=\"calcTotalResult\">' + formatCurrencyAr(0) + '</span></div>' +
+        '</div>';
+
+      setRatesNote(
+        'No respondió la fuente oficial (' + ((error && error.message) ? error.message : 'ERROR') + '). Se aplicó estimación manual para continuar.',
+        true
+      );
+      animateCurrency('calcTotalResult', totalFallback, 1500);
+    } else {
+      renderCalculatorError((error && error.message) ? (error.message + ' Puede usar \"Personalizada (manual)\" como alternativa.') : 'Error al calcular con la fuente oficial.');
+    }
   } finally {
     calculatorState.isCalculating = false;
     setCalculatorSubmitLoading(false);

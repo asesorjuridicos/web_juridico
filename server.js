@@ -14,9 +14,25 @@ const DATA_DIR = path.join(ROOT_DIR, 'data');
 const CACHE_FILE = path.join(DATA_DIR, 'chaco-rates-cache.json');
 const VISITS_FILE = path.join(DATA_DIR, 'visits.json');
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const VISITS_BASELINE = 800;
 const VISIT_DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000;
 const OFFICIAL_HOST = 'www.justiciachaco.gov.ar';
 const OFFICIAL_CALC_PATH = '/sistemas/calcula_tasas/calculadora_v2/';
+const OFFICIAL_REQUEST_TIMEOUT_MS = (() => {
+  const raw = Number(process.env.OFFICIAL_REQUEST_TIMEOUT_MS);
+  if (!Number.isFinite(raw)) return 45000;
+  return Math.max(5000, Math.min(120000, Math.floor(raw)));
+})();
+const OFFICIAL_REQUEST_RETRIES = (() => {
+  const raw = Number(process.env.OFFICIAL_REQUEST_RETRIES);
+  if (!Number.isFinite(raw)) return 2;
+  return Math.max(0, Math.min(4, Math.floor(raw)));
+})();
+const OFFICIAL_RETRY_DELAY_MS = (() => {
+  const raw = Number(process.env.OFFICIAL_RETRY_DELAY_MS);
+  if (!Number.isFinite(raw)) return 600;
+  return Math.max(100, Math.min(5000, Math.floor(raw)));
+})();
 const CONTACT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const CONTACT_RATE_LIMIT_MAX = 5;
 const CONTACT_ROUTE_PATHS = new Set(['/api/contacto', '/api/contacto/', '/api/contact', '/api/contact/']);
@@ -229,7 +245,22 @@ function parseRateOptionsFromHtml(html) {
   return normalizeRateItems(items);
 }
 
-function requestOfficialPage({ method, path: requestPath, body, cookieHeader }) {
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableOfficialError(error) {
+  const code = String(error && error.code ? error.code : '').toUpperCase();
+  const message = String(error && error.message ? error.message : '').toUpperCase();
+  if (message.includes('TIMEOUT')) return true;
+  return code === 'ETIMEDOUT'
+    || code === 'ESOCKETTIMEDOUT'
+    || code === 'ECONNRESET'
+    || code === 'EAI_AGAIN'
+    || code === 'ENOTFOUND';
+}
+
+function requestOfficialPageOnce({ method, path: requestPath, body, cookieHeader }) {
   return new Promise((resolve, reject) => {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -256,7 +287,8 @@ function requestOfficialPage({ method, path: requestPath, body, cookieHeader }) 
         path: requestPath,
         method,
         family: 4,
-        timeout: 25000,
+        timeout: OFFICIAL_REQUEST_TIMEOUT_MS,
+        agent: false,
         headers
       },
       (res) => {
@@ -287,6 +319,24 @@ function requestOfficialPage({ method, path: requestPath, body, cookieHeader }) 
     }
     req.end();
   });
+}
+
+async function requestOfficialPage(params) {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= OFFICIAL_REQUEST_RETRIES; attempt += 1) {
+    try {
+      return await requestOfficialPageOnce(params);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= OFFICIAL_REQUEST_RETRIES || !isRetryableOfficialError(error)) {
+        throw error;
+      }
+      await wait(OFFICIAL_RETRY_DELAY_MS * (attempt + 1));
+    }
+  }
+
+  throw lastError || new Error('OFFICIAL_REQUEST_FAILED');
 }
 
 function extractFieldValue(html, fieldName) {
@@ -570,7 +620,7 @@ function loadVisitsFile() {
   try {
     if (!fs.existsSync(VISITS_FILE)) {
       return {
-        total: 0,
+        total: VISITS_BASELINE,
         updatedAt: null,
         recentVisitors: {}
       };
@@ -584,14 +634,16 @@ function loadVisitsFile() {
       ? parsed.recentVisitors
       : {};
 
+    const normalizedTotal = Number.isFinite(total) && total >= 0 ? Math.floor(total) : VISITS_BASELINE;
+
     return {
-      total: Number.isFinite(total) && total >= 0 ? Math.floor(total) : 0,
+      total: Math.max(normalizedTotal, VISITS_BASELINE),
       updatedAt,
       recentVisitors
     };
   } catch (_error) {
     return {
-      total: 0,
+      total: VISITS_BASELINE,
       updatedAt: null,
       recentVisitors: {}
     };
