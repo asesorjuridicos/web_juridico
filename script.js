@@ -321,20 +321,50 @@ function loadChacoRates() {
   setRatesNote('Tasas oficiales: cargando...', false);
 
   return fetch('/api/tasas/chaco', { cache: 'no-store' })
-    .then(function (res) { return res.json(); })
-    .then(function (data) {
-      var items = Array.isArray(data && data.items) ? data.items : [];
+    .then(function (res) {
+      return res
+        .json()
+        .catch(function () { return {}; })
+        .then(function (data) {
+          return {
+            ok: res.ok,
+            status: res.status,
+            data: data || {}
+          };
+        });
+    })
+    .then(function (result) {
+      var data = result.data || {};
+      var backendItems = Array.isArray(data && data.items) ? data.items : [];
+      var hasBackendItems = backendItems.length > 0;
+      var items = hasBackendItems ? backendItems : FALLBACK_RATES;
       renderRateOptions(items);
       calculatorState.ratesLoaded = items.length > 0;
-      calculatorState.ratesSource = (data && data.source) || 'manual';
+      calculatorState.ratesSource = hasBackendItems ? ((data && data.source) || 'manual') : 'fallback';
 
       var sourceLabel = '';
-      if (calculatorState.ratesSource === 'official') {
+      if (!hasBackendItems) {
+        sourceLabel = 'Lista base disponible (la API no devolvió tasas en este momento).';
+      } else if (calculatorState.ratesSource === 'official') {
         sourceLabel = 'Fuente oficial Chaco (actualizada).';
       } else if (calculatorState.ratesSource === 'cache' || calculatorState.ratesSource === 'cache_fallback') {
         sourceLabel = 'Fuente oficial Chaco desde caché local.';
       } else {
         sourceLabel = 'Lista base disponible (sin conexión oficial en este momento).';
+      }
+
+      if (!result.ok || (data && data.ok === false)) {
+        var backendError = (data && (data.error || data.message)) || ('HTTP_' + result.status);
+        setRatesNote(
+          'No se pudo leer la fuente oficial (' + backendError + '). Se cargó lista base para continuar.',
+          true
+        );
+        return;
+      }
+
+      if (!hasBackendItems) {
+        setRatesNote(sourceLabel, true);
+        return;
       }
 
       var note = data && data.note ? data.note : sourceLabel;
