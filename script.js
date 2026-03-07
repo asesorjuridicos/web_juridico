@@ -318,10 +318,18 @@ function renderRateOptions(items) {
 }
 
 function loadChacoRates() {
-  setRatesNote('Tasas oficiales: cargando...', false);
+  setRatesNote('Tasas oficiales: actualizando...', false);
 
-  return fetch('/api/tasas/chaco', { cache: 'no-store' })
+  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var fetchTimer = controller ? setTimeout(function () { controller.abort(); }, 8000) : null;
+
+  function clearFetchTimer() {
+    if (fetchTimer !== null) { clearTimeout(fetchTimer); fetchTimer = null; }
+  }
+
+  return fetch('/api/tasas/chaco', { cache: 'no-store', signal: controller ? controller.signal : undefined })
     .then(function (res) {
+      clearFetchTimer();
       return res
         .json()
         .catch(function () { return {}; })
@@ -371,6 +379,7 @@ function loadChacoRates() {
       setRatesNote(note, false);
     })
     .catch(function () {
+      clearFetchTimer();
       calculatorState.ratesLoaded = true;
       calculatorState.ratesSource = 'fallback';
       renderRateOptions(FALLBACK_RATES);
@@ -430,7 +439,9 @@ function initHeroCalculator() {
   }
 
   switchCalculatorMode('general');
-  applySelectedRateType();
+  renderRateOptions(FALLBACK_RATES);
+  calculatorState.ratesLoaded = true;
+  calculatorState.ratesSource = 'fallback';
   loadChacoRates();
 }
 
