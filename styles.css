@@ -254,6 +254,10 @@ ul, ol { list-style: none; }
   display: none;
   flex: 1;
   text-align: center;
+  text-decoration: none;
+}
+.header-tagline:hover {
+  color: rgba(245, 248, 255, 0.9);
 }
 @media (min-width: 768px) {
   .header-tagline { display: block; }
