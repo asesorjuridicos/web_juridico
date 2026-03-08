@@ -717,8 +717,9 @@ function initSideRobot() {
 
   // 2. Lógica de aparición basada en scroll
   var sideRobotVisible = false;
-  var sideRobotHiddenByUser = false;
+  var sideRobotCooldown = false;
   var scrollHideTimer = null;
+  var robotCooldownTimer = null;
   var lastMsgIndex = -1;
 
   function getRandomMsg() {
@@ -729,7 +730,7 @@ function initSideRobot() {
   }
 
   function showSideRobot() {
-    if (sideRobotVisible || sideRobotHiddenByUser) return;
+    if (sideRobotVisible || sideRobotCooldown) return;
     var el = document.getElementById('sideRobot');
     var textEl = document.getElementById('sideRobotText');
     if (!el) return;
@@ -749,6 +750,9 @@ function initSideRobot() {
     var el = document.getElementById('sideRobot');
     if (el) el.classList.remove('visible');
     sideRobotVisible = false;
+    sideRobotCooldown = true;
+    clearTimeout(robotCooldownTimer);
+    robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 10000);
   }
 
   // Mostrar al hacer scroll pasado cierto punto (300px)
@@ -759,8 +763,6 @@ function initSideRobot() {
     clearTimeout(scrollDebounce);
     scrollDebounce = setTimeout(function() {
       if (window.scrollY > scrollThreshold) {
-        // Al bajar la barra, mostrar el robot
-        sideRobotHiddenByUser = false; // Permitir que reaparezca al seguir scrolleando
         showSideRobot();
       } else {
         // Si vuelve arriba, ocultarlo suavemente
@@ -768,13 +770,17 @@ function initSideRobot() {
       }
     }, 200);
   }, { passive: true });
-}
 
-// Función global para ocultarlo manualmente (con la X)
-window.hideSideRobot = function() {
-  var el = document.getElementById('sideRobot');
-  if (el) el.classList.remove('visible');
-};
+  // Función global para ocultarlo manualmente (con la X) — tiene acceso al closure
+  window.hideSideRobot = function() {
+    var el = document.getElementById('sideRobot');
+    if (el) el.classList.remove('visible');
+    sideRobotVisible = false;
+    sideRobotCooldown = true;
+    clearTimeout(robotCooldownTimer);
+    robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 30000);
+  };
+}
 
 // ===== DIAGNOSTIC MODULE =====
 var diagnosticState = {
