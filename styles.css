@@ -206,6 +206,7 @@ ul, ol { list-style: none; }
   align-items: center;
   justify-content: space-between;
   min-height: 80px;
+  position: relative;
 }
 
 .header-logo {
@@ -242,6 +243,25 @@ ul, ol { list-style: none; }
 
 @media (max-width: 639px) {
   .header-logo-text { display: none; }
+}
+
+.header-tagline {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(245, 248, 255, 0.65);
+  display: none;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+@media (min-width: 768px) {
+  .header-tagline { display: block; }
+}
+.header.scrolled .header-tagline {
+  color: rgba(18, 39, 68, 0.55);
 }
 
 /* Desktop Nav */
