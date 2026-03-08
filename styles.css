@@ -206,7 +206,6 @@ ul, ol { list-style: none; }
   align-items: center;
   justify-content: space-between;
   min-height: 80px;
-  position: relative;
 }
 
 .header-logo {
@@ -253,9 +252,8 @@ ul, ol { list-style: none; }
   text-transform: uppercase;
   color: rgba(245, 248, 255, 0.65);
   display: none;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: 1;
+  text-align: center;
 }
 @media (min-width: 768px) {
   .header-tagline { display: block; }

@@ -711,7 +711,7 @@ function initSideRobot() {
       robotSvg +
       '<div class="side-robot-close" onclick="event.stopPropagation(); hideSideRobot();">✕</div>' +
     '</div>' +
-    '<div class="side-robot-bubble" id="sideRobotText">Estimado, ¿en qué podemos asesorarle?</div>';
+    '<div class="side-robot-bubble" id="sideRobotText" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})" style="cursor:pointer;">Estimado, ¿en qué podemos asesorarle?</div>';
 
   document.body.appendChild(robotContainer);
 
