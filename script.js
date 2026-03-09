@@ -928,6 +928,27 @@ var expressState = {
   processingTimer: null
 };
 
+var TYPING_DELAY = 700;
+
+function pulseRobot() {
+  var el = document.querySelector('.diagnostic-robot');
+  if (!el) return;
+  el.classList.remove('pulse');
+  void el.offsetWidth;
+  el.classList.add('pulse');
+  setTimeout(function() { el.classList.remove('pulse'); }, 450);
+}
+
+function buildTypingBubble() {
+  return '<div class="typing-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+}
+
+function buildProgressBar(step, total) {
+  var pct = Math.round((step / total) * 100);
+  return '<div class="diag-progress-wrap"><div class="diag-progress-fill" style="width:' + pct + '%"></div></div>' +
+         '<span class="diag-progress-label">Paso ' + step + ' de ' + total + '</span>';
+}
+
 function initDiagnosticTabs() {
   switchDiagnosticTab('express');
 }
@@ -987,58 +1008,43 @@ function startDiagnostic() {
 }
 
 function renderQuestion(stepNum) {
-  var q = questions[stepNum - 1];
   var container = document.getElementById('step' + stepNum);
-  var colsClass = q.options.length === 3 ? 'cols-3' : 'cols-2';
+  if (!container) return;
 
-  var progressHTML = '<div class="progress-steps">';
-  for (var s = 1; s <= 3; s++) {
-    var circleClass = 'inactive';
-    var circleContent = s;
-    if (s < stepNum) {
-      circleClass = 'completed';
-      circleContent = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>';
-    } else if (s === stepNum) {
-      circleClass = 'active';
-    }
-    progressHTML += '<div class="progress-step">';
-    progressHTML += '<div class="progress-circle ' + circleClass + '">' + circleContent + '</div>';
-    if (s < 3) {
-      progressHTML += '<div class="progress-line ' + (s < stepNum ? 'completed' : 'inactive') + '"></div>';
-    }
-    progressHTML += '</div>';
-  }
-  progressHTML += '</div>';
+  container.innerHTML = buildTypingBubble();
 
-  var tagsHTML = '';
-  if (diagnosticState.answers.length > 0) {
-    tagsHTML = '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">';
-    diagnosticState.answers.forEach(function (a) {
-      tagsHTML += '<span class="answer-tag"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>' + a + '</span>';
+  setTimeout(function() {
+    var q = questions[stepNum - 1];
+    var colsClass = q.options.length === 3 ? 'cols-3' : 'cols-2';
+
+    var tagsHTML = '';
+    if (diagnosticState.answers.length > 0) {
+      tagsHTML = '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:center;margin-bottom:1.5rem;">';
+      diagnosticState.answers.forEach(function (a) {
+        tagsHTML += '<span class="answer-tag"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>' + a + '</span>';
+      });
+      tagsHTML += '</div>';
+    }
+
+    var optionsHTML = '<div class="options-grid ' + colsClass + '">';
+    q.options.forEach(function (opt) {
+      optionsHTML += '<button class="option-btn" onclick="handleAnswer(\'' + opt.label + '\')">';
+      optionsHTML += '<span class="emoji">' + opt.icon + '</span>';
+      optionsHTML += '<span class="label">' + opt.label + '</span>';
+      optionsHTML += '</button>';
     });
-    tagsHTML += '</div>';
-  }
+    optionsHTML += '</div>';
 
-  var optionsHTML = '<div class="options-grid ' + colsClass + '">';
-  q.options.forEach(function (opt) {
-    optionsHTML += '<button class="option-btn" onclick="handleAnswer(\'' + opt.label + '\')">';
-    optionsHTML += '<span class="emoji">' + opt.icon + '</span>';
-    optionsHTML += '<span class="label">' + opt.label + '</span>';
-    optionsHTML += '</button>';
-  });
-  optionsHTML += '</div>';
+    container.innerHTML =
+      buildProgressBar(stepNum, 3) +
+      tagsHTML +
+      '<div class="question-card">' +
+        '<h3>' + q.question + '</h3>' +
+        optionsHTML +
+      '</div>';
 
-  container.innerHTML =
-    progressHTML +
-    tagsHTML +
-    '<div class="question-card">' +
-      '<div class="question-header">' +
-        '<div class="question-number">' + stepNum + '</div>' +
-        '<p style="color:#8a95a8;font-size:0.875rem;font-weight:500;">Diagnóstico completo · Paso ' + stepNum + ' de 3</p>' +
-      '</div>' +
-      '<h3>' + q.question + '</h3>' +
-      optionsHTML +
-    '</div>';
+    pulseRobot();
+  }, TYPING_DELAY);
 }
 
 function handleAnswer(answer) {
@@ -1232,45 +1238,42 @@ function getExpressContextParts() {
 
 function renderExpressQuestion(questionId) {
   var questionConfig = EXPRESS_FLOW[questionId];
-  if (!questionConfig) {
-    return;
-  }
+  if (!questionConfig) return;
 
   expressState.currentQuestionId = questionId;
   expressState.step = expressState.history.length + 1;
 
-  var container = questionId === 'area'
-    ? document.getElementById('expressStep1')
-    : document.getElementById('expressStep2');
+  var stepNum = questionId === 'area' ? 1 : 2;
+  var container = document.getElementById('expressStep' + stepNum);
+  if (!container) return;
 
-  if (!container) {
-    return;
-  }
+  container.innerHTML = buildTypingBubble();
+  showExpressStep(stepNum);
 
-  var colsClass = getExpressGridClass(questionConfig.options.length);
-  var optionsHTML = '<div class="iax-options-grid ' + colsClass + '">';
-  questionConfig.options.forEach(function (opt) {
-    optionsHTML += '<button class="iax-option-btn" type="button" data-value="' + opt.value + '" onclick="handleExpressOptionSelect(this.getAttribute(\'data-value\'))">' + opt.label + '</button>';
-  });
-  optionsHTML += '</div>';
+  setTimeout(function() {
+    var colsClass = getExpressGridClass(questionConfig.options.length);
+    var optionsHTML = '<div class="iax-options-grid ' + colsClass + '">';
+    questionConfig.options.forEach(function (opt) {
+      optionsHTML += '<button class="iax-option-btn" type="button" data-value="' + opt.value + '" onclick="handleExpressOptionSelect(this.getAttribute(\'data-value\'))">' + opt.label + '</button>';
+    });
+    optionsHTML += '</div>';
 
-  var contextParts = getExpressContextParts();
-  var contextHTML = contextParts.length > 0
-    ? '<p class="iax-answer-pill">' + contextParts.join(' · ') + '</p>'
-    : '';
+    var contextParts = getExpressContextParts();
+    var contextHTML = contextParts.length > 0
+      ? '<p class="iax-answer-pill">' + contextParts.join(' · ') + '</p>'
+      : '';
 
-  container.innerHTML =
-    '<div class="question-card iax-card">' +
-      contextHTML +
-      '<div class="question-header">' +
-        '<div class="question-number">' + expressState.step + '</div>' +
-        '<p style="color:#8a95a8;font-size:0.875rem;font-weight:500;">Paso ' + expressState.step + ' de ' + getExpressTotalSteps() + '</p>' +
-      '</div>' +
-      '<h3>' + questionConfig.question + '</h3>' +
-      optionsHTML +
-    '</div>';
+    var total = getExpressTotalSteps();
+    container.innerHTML =
+      '<div class="question-card iax-card">' +
+        contextHTML +
+        buildProgressBar(expressState.step, total) +
+        '<h3>' + questionConfig.question + '</h3>' +
+        optionsHTML +
+      '</div>';
 
-  showExpressStep(questionId === 'area' ? 1 : 2);
+    pulseRobot();
+  }, TYPING_DELAY);
 }
 
 function getOptionLabel(questionId, optionValue) {
