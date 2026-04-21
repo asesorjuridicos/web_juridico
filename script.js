@@ -1442,31 +1442,154 @@ function buildExpressWhatsAppLink() {
   return 'https://wa.me/543644388960?text=' + encodeURIComponent(waMessage);
 }
 
+function getExpressCaseSummary() {
+  var area = expressState.areaKey;
+  var primary = expressState.primaryLabel || '';
+  var role = expressState.roleKey;
+
+  if (area === 'laboral') {
+    if (role === 'trabajador') {
+      if (primary.indexOf('Despido') !== -1 || primary.indexOf('despido') !== -1)
+        return 'Su caso involucra un despido sin causa justificada. Tiene derecho a liquidación final, indemnización por antigüedad, integración del mes de despido y preaviso según su antigüedad.';
+      if (primary.indexOf('negro') !== -1 || primary.indexOf('registrado') !== -1)
+        return 'Su caso involucra trabajo no registrado (en negro). Corresponden multas por falta de registración, doble indemnización y pago de haberes adeudados desde el inicio de la relación.';
+      if (primary.indexOf('salarial') !== -1 || primary.indexOf('Diferencias') !== -1)
+        return 'Su caso involucra diferencias salariales no abonadas. Se calcularán las diferencias mes a mes con los intereses legales aplicables en Chaco.';
+      if (primary.indexOf('ART') !== -1 || primary.indexOf('Accidente') !== -1)
+        return 'Su caso involucra un accidente laboral. Procede reclamar ante la ART y, según las circunstancias, iniciar demanda por daño directo al empleador por incumplimiento del deber de seguridad.';
+      return 'Su caso laboral como trabajador requiere análisis de la relación de dependencia, la liquidación final y las indemnizaciones aplicables según el convenio colectivo.';
+    } else {
+      if (primary.indexOf('demanda') !== -1 || primary.indexOf('Defensa') !== -1)
+        return 'Su caso requiere defensa ante una demanda laboral. Es fundamental revisar la causal de despido, la documentación del empleado y la liquidación practicada para construir la defensa.';
+      if (primary.indexOf('liquidación') !== -1 || primary.indexOf('Impugnación') !== -1)
+        return 'Su caso involucra impugnación de liquidación laboral. Se revisará la correcta aplicación del convenio colectivo y los montos reclamados para identificar errores o excesos.';
+      return 'Su caso como empleador demandado requiere revisión documental completa, análisis de la liquidación impugnada y diseño de la estrategia probatoria.';
+    }
+  }
+  if (area === 'sucesiones') {
+    if (primary.indexOf('acuerdo') !== -1 || primary.indexOf('Acuerdo') !== -1)
+      return 'Su sucesión cuenta con acuerdo entre herederos. Se puede tramitar la declaratoria, el inventario y la partición de forma ágil, evitando costos judiciales innecesarios.';
+    if (primary.indexOf('conflicto') !== -1 || primary.indexOf('Conflicto') !== -1)
+      return 'Su sucesión presenta conflicto entre herederos. Se requiere estrategia de negociación o vía judicial para la partición del acervo, preservando los derechos de cada parte.';
+    return 'Su caso de sucesión requiere declaratoria de herederos, inventario de bienes y gestión de la partición del patrimonio del causante conforme la normativa vigente en Chaco.';
+  }
+  if (area === 'inmobiliario') {
+    if (primary.indexOf('Desalojo') !== -1)
+      return 'Su caso requiere iniciar un proceso de desalojo. Se evaluará el contrato, las intimaciones previas efectuadas y la vía procesal más expedita disponible en el fuero chaqueño.';
+    if (primary.indexOf('Contrato') !== -1 || primary.indexOf('Blindaje') !== -1)
+      return 'Su caso requiere revisión y blindaje del contrato. Se analizarán cláusulas de riesgo, garantías, condiciones resolutorias y mecanismos de actualización para proteger su posición.';
+    if (primary.indexOf('Tasación') !== -1)
+      return 'Su caso requiere una tasación judicial o extrajudicial. Se emitirá un informe técnico con valor pericial para uso en negociaciones, litigios o declaraciones patrimoniales.';
+    if (primary.indexOf('alquiler') !== -1 || primary.indexOf('Cobro') !== -1)
+      return 'Su caso involucra alquileres adeudados. Se analizará la deuda acumulada, los intereses aplicables y la vía judicial más rápida para su cobro compulsivo.';
+    return 'Su caso inmobiliario requiere análisis contractual y definición de la estrategia procesal más adecuada para su situación específica.';
+  }
+  if (area === 'transito') {
+    if (primary.indexOf('Lesiones') !== -1)
+      return 'Su caso involucra lesiones personales por accidente de tránsito. Se analizará la responsabilidad civil, el daño corporal y el cálculo de la indemnización incluyendo lucro cesante y daño moral.';
+    if (primary.indexOf('materiales') !== -1)
+      return 'Su caso involucra daños materiales por accidente de tránsito. Se evaluará la responsabilidad y el reclamo a la aseguradora o directamente al responsable del siniestro.';
+    if (primary.indexOf('grave') !== -1 || primary.indexOf('fallecimiento') !== -1)
+      return 'Su caso involucra lesión grave o fallecimiento. Corresponde un reclamo integral de daños y perjuicios con tasación pericial del daño y posible denuncia penal.';
+    return 'Su caso de tránsito requiere análisis de responsabilidad civil, el seguro involucrado y la estrategia de reclamo más efectiva para obtener la indemnización correspondiente.';
+  }
+  if (area === 'ejecuciones') {
+    if (primary.indexOf('Pagaré') !== -1 || primary.indexOf('cheque') !== -1 || primary.indexOf('pagaré') !== -1)
+      return 'Su caso involucra ejecución de título cambiario. Se iniciará el proceso ejecutivo para el cobro compulsivo con solicitud de embargo preventivo sobre bienes del deudor.';
+    if (primary.indexOf('alquiler') !== -1 || primary.indexOf('Alquiler') !== -1)
+      return 'Su caso involucra ejecución de alquileres adeudados. Se tramitará el cobro judicial de la deuda y, de corresponder, el desalojo de forma simultánea.';
+    return 'Su caso de ejecución requiere análisis del título ejecutivo, identificación de bienes del deudor y selección de la vía procesal más expedita en Chaco.';
+  }
+  return 'Su caso requiere análisis jurídico personalizado para determinar la mejor estrategia de acción disponible en la jurisdicción de Chaco.';
+}
+
+function getExpressDocsNeeded() {
+  var area = expressState.areaKey;
+  var role = expressState.roleKey;
+  var primary = expressState.primaryLabel || '';
+
+  if (area === 'laboral') {
+    if (role === 'trabajador') {
+      var docs = ['Recibos de sueldo (últimos 12 meses)', 'DNI del trabajador', 'Constancia de CUIL / ANSES'];
+      if (primary.indexOf('Despido') !== -1 || primary.indexOf('despido') !== -1)
+        docs.push('Telegrama de despido o carta documento recibida');
+      else if (primary.indexOf('negro') !== -1 || primary.indexOf('registrado') !== -1)
+        docs.push('Prueba de trabajo: mensajes, fotos, testigos');
+      else if (primary.indexOf('ART') !== -1 || primary.indexOf('Accidente') !== -1) {
+        docs.push('Denuncia ante ART');
+        docs.push('Informes médicos y certificados de incapacidad');
+      }
+      return docs;
+    } else {
+      return ['Legajo completo del empleado', 'Telegrama o carta documento de despido', 'Liquidación final practicada', 'Registros de asistencia y sanciones previas'];
+    }
+  }
+  if (area === 'sucesiones')
+    return ['DNI del causante', 'Partida de defunción', 'Partidas de nacimiento de los herederos', 'Escrituras de los bienes (si existen)', 'CUIL del causante'];
+  if (area === 'inmobiliario') {
+    if (primary.indexOf('Desalojo') !== -1)
+      return ['Contrato de locación', 'Comprobantes de deuda de alquileres', 'Intimaciones fehacientes previas', 'Título de propiedad'];
+    if (primary.indexOf('Tasación') !== -1)
+      return ['Escritura o título de propiedad', 'Planos del inmueble', 'Constancias catastrales'];
+    return ['Contrato de locación o escritura', 'Documentación de la propiedad', 'Comprobantes de pago y deuda acumulada'];
+  }
+  if (area === 'transito')
+    return ['Acta policial del accidente', 'Póliza del seguro del vehículo', 'DNI del conductor', 'Informes médicos (si hay lesiones)', 'Presupuesto de reparación del vehículo'];
+  if (area === 'ejecuciones') {
+    if (primary.indexOf('Pagaré') !== -1 || primary.indexOf('cheque') !== -1 || primary.indexOf('pagaré') !== -1)
+      return ['Pagaré / cheque original', 'Acta de protesto notarial', 'Domicilio del deudor', 'CUIT del deudor (si disponible)'];
+    return ['Título ejecutivo original', 'Domicilio del deudor', 'CUIT / CUIL del deudor'];
+  }
+  return ['DNI del consultante', 'Documentación vinculada al caso'];
+}
+
+function getExpressStats() {
+  var map = {
+    laboral:      { total: 8, viable: 2 },
+    sucesiones:   { total: 5, viable: 1 },
+    inmobiliario: { total: 7, viable: 2 },
+    transito:     { total: 6, viable: 1 },
+    ejecuciones:  { total: 4, viable: 1 }
+  };
+  return map[expressState.areaKey] || { total: 6, viable: 1 };
+}
+
 function renderExpressResult() {
   var container = document.getElementById('expressStep4');
-  if (!container) {
-    return;
-  }
+  if (!container) return;
 
   var waLink = buildExpressWhatsAppLink();
   var detail = getExpressPrimaryDetail();
   var secondary = [];
-  if (expressState.urgencyLabel) {
-    secondary.push('Urgencia: ' + expressState.urgencyLabel);
-  }
-  if (expressState.docsLabel) {
-    secondary.push('Documentación: ' + expressState.docsLabel);
-  }
+  if (expressState.urgencyLabel) secondary.push('Urgencia: ' + expressState.urgencyLabel);
+  if (expressState.docsLabel) secondary.push('Documentación: ' + expressState.docsLabel);
+
+  var summary = getExpressCaseSummary();
+  var docs = getExpressDocsNeeded();
+  var stats = getExpressStats();
+  var rutasText = stats.viable + ' ruta' + (stats.viable > 1 ? 's' : '') + ' viable' + (stats.viable > 1 ? 's' : '');
+
+  var docsHTML = '<ul class="result-docs-list">';
+  docs.forEach(function(d) { docsHTML += '<li>' + d + '</li>'; });
+  docsHTML += '</ul>';
 
   container.innerHTML =
     '<div class="result-card">' +
-      '<p class="iax-answer-pill">' + (expressState.areaLabel || '[SIN ÁREA]') + ' · ' + detail + '</p>' +
-      (secondary.length > 0 ? '<p class="text-light-gray text-sm" style="margin-bottom:0.8rem;">' + secondary.join(' · ') + '</p>' : '') +
-      '<h3 class="iax-result-title">Auditoría completada. Hemos detectado una ruta de acción viable.</h3>' +
-      '<p class="text-muted text-base" style="line-height:1.65;margin-bottom:1.5rem;">Podemos avanzar con una evaluación estratégica confidencial de su caso.</p>' +
+      '<p class="iax-answer-pill">' + (expressState.areaLabel || '') + ' · ' + detail + '</p>' +
+      (secondary.length > 0 ? '<p class="text-light-gray text-sm" style="margin-bottom:1rem;">' + secondary.join(' · ') + '</p>' : '') +
+      '<h3 class="iax-result-title" style="font-size:clamp(1.1rem,3vw,1.35rem);margin-bottom:0.6rem;">Auditoría completada</h3>' +
+      '<p class="result-summary">' + summary + '</p>' +
+      '<div class="result-docs-section">' +
+        '<p class="result-docs-title">Documentación recomendada para su caso:</p>' +
+        docsHTML +
+      '</div>' +
+      '<div class="result-stats-bar">' +
+        '<span class="result-stats-number">' + stats.total + '</span>' +
+        '<span class="result-stats-text">casos similares analizados<br><strong>' + rutasText + ' detectada' + (stats.viable > 1 ? 's' : '') + '</strong> para esta situación</span>' +
+      '</div>' +
       '<div class="result-buttons">' +
         '<a href="' + waLink + '" target="_blank" rel="noopener noreferrer" class="btn-gold-solid">Continuar por WhatsApp</a>' +
-        '<button type="button" class="btn-reset" onclick="resetExpressDiagnostic()">Nuevo diagnóstico express</button>' +
+        '<button type="button" class="btn-reset" onclick="resetExpressDiagnostic()">Nuevo diagnóstico</button>' +
       '</div>' +
     '</div>';
 }
@@ -1610,3 +1733,51 @@ document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
     }
   });
 });
+
+// ─── Tasador Exprés / ValorJusto Modal ──────────────────────────────────────
+function initValorJustoModal() {
+  var openBtn = document.getElementById('openValorJustoModal');
+  var closeBtn = document.getElementById('closeValorJustoModal');
+  var modal = document.getElementById('valorJustoModal');
+
+  if (!openBtn || !closeBtn || !modal || modal.dataset.initialized === 'true') {
+    return;
+  }
+
+  modal.dataset.initialized = 'true';
+
+  var closeTargets = modal.querySelectorAll('[data-close-valorjusto]');
+  var lastFocusedElement = null;
+
+  function openModal() {
+    lastFocusedElement = document.activeElement;
+    modal.hidden = false;
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('vj-modal-open');
+    closeBtn.focus();
+  }
+
+  function closeModal() {
+    modal.hidden = true;
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('vj-modal-open');
+    if (lastFocusedElement instanceof HTMLElement) {
+      lastFocusedElement.focus();
+    }
+  }
+
+  openBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+
+  closeTargets.forEach(function(node) {
+    node.addEventListener('click', closeModal);
+  });
+
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && !modal.hidden) {
+      closeModal();
+    }
+  });
+}
+
+initValorJustoModal();

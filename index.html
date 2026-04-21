@@ -92,6 +92,15 @@
               <div class="hero-buttons reveal reveal-delay-4">
                 <a href="https://wa.me/543644388960?text=Hola%2C%20quisiera%20agendar%20una%20consulta%20confidencial%20sobre%20mi%20caso." target="_blank" rel="noopener noreferrer" class="btn-gold">Asegurar mi Victoria</a>
                 <a href="#especialidades" class="btn-gold-outline">Especialidades de Élite</a>
+                <button
+                  type="button"
+                  class="btn-gold-outline"
+                  id="openValorJustoModal"
+                  aria-haspopup="dialog"
+                  aria-controls="valorJustoModal"
+                >
+                  Tasador Exprés
+                </button>
               </div>
             </div>
 
@@ -618,6 +627,47 @@
       <path d="M16.01 3C8.84 3 3 8.74 3 15.79c0 2.26.61 4.46 1.78 6.39L3 29l7.02-1.82a13.15 13.15 0 0 0 5.99 1.43H16c7.17 0 13-5.74 13-12.8C29 8.74 23.17 3 16.01 3zm0 23.49h-.01a10.9 10.9 0 0 1-5.55-1.51l-.4-.24-4.17 1.08 1.11-4.05-.27-.42a10.6 10.6 0 0 1-1.65-5.56c0-5.85 4.88-10.61 10.89-10.61 6 0 10.89 4.76 10.89 10.61 0 5.85-4.88 10.7-10.84 10.7z" />
     </svg>
   </a>
+
+  <div
+    class="vj-modal"
+    id="valorJustoModal"
+    hidden
+    aria-hidden="true"
+  >
+    <div class="vj-modal__backdrop" data-close-valorjusto></div>
+
+    <div
+      class="vj-modal__dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="valorJustoTitle"
+    >
+      <button
+        type="button"
+        class="vj-modal__close"
+        id="closeValorJustoModal"
+        aria-label="Cerrar Tasador Exprés"
+      >
+        &times;
+      </button>
+
+      <div class="vj-modal__header">
+        <p class="vj-modal__eyebrow">ValorJusto</p>
+        <h2 id="valorJustoTitle">Tasador Exprés</h2>
+      </div>
+
+      <div class="vj-modal__frame-wrap">
+        <iframe
+          id="valorJustoFrame"
+          src="https://iostojic.pythonanywhere.com"
+          title="Calculadora ValorJusto"
+          loading="lazy"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </div>
+  </div>
 
   <script src="script.js?v=20260308-3"></script>
 </body>
