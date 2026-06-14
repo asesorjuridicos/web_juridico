@@ -1,7 +1,7 @@
 {
   "ok": true,
   "source": "official",
-  "updatedAt": "2026-03-05T12:10:44.100Z",
+  "updatedAt": "2026-06-13T23:57:22.566Z",
   "items": [
     {
       "value": "13",
@@ -44,11 +44,6 @@
       "annualRate": null
     },
     {
-      "value": "8",
-      "label": "SIN INTERESES",
-      "annualRate": 0
-    },
-    {
       "value": "2",
       "label": "T. ACTIVA 30 DIAS BNA",
       "annualRate": null
@@ -61,6 +56,11 @@
     {
       "value": "14",
       "label": "T. ALIMENTOS ART.552 CCCN BCRA + T.A. BNA",
+      "annualRate": null
+    },
+    {
+      "value": "15",
+      "label": "T. INTERESES MORATORIOS (TIM) BCRA",
       "annualRate": null
     },
     {

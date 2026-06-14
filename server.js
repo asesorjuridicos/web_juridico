@@ -17,15 +17,16 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const VISITS_BASELINE = 800;
 const VISIT_DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000;
 const OFFICIAL_HOST = 'www.justiciachaco.gov.ar';
-const OFFICIAL_CALC_PATH = '/sistemas/calcula_tasas/calculadora_v2/';
+const OFFICIAL_CALC_PAGE_PATH = '/index.php?action=calculadora';
+const OFFICIAL_CALC_API_BASE = '/views/modules/profesionales/calcula_tasas/';
 const OFFICIAL_REQUEST_TIMEOUT_MS = (() => {
   const raw = Number(process.env.OFFICIAL_REQUEST_TIMEOUT_MS);
-  if (!Number.isFinite(raw)) return 45000;
+  if (!Number.isFinite(raw)) return 8000;
   return Math.max(5000, Math.min(120000, Math.floor(raw)));
 })();
 const OFFICIAL_REQUEST_RETRIES = (() => {
   const raw = Number(process.env.OFFICIAL_REQUEST_RETRIES);
-  if (!Number.isFinite(raw)) return 2;
+  if (!Number.isFinite(raw)) return 1;
   return Math.max(0, Math.min(4, Math.floor(raw)));
 })();
 const OFFICIAL_RETRY_DELAY_MS = (() => {
@@ -81,6 +82,7 @@ const KNOWN_RATE_IDS = {
   'T. ACTIVA 30 DIAS BNA': '2',
   'T. ACTIVA 30 DIAS BNA X 1,5': '7',
   'T. ALIMENTOS ART.552 CCCN BCRA + T.A. BNA': '14',
+  'T. INTERESES MORATORIOS (TIM) BCRA': '15',
   'T. PASIVA USO JUSTICIA BCRA': '1'
 };
 
@@ -93,12 +95,43 @@ const FALLBACK_RATES = [
   { value: '9', label: '48%', annualRate: 48 },
   { value: '11', label: '56%', annualRate: 56 },
   { value: '6', label: 'PACTADA', annualRate: null },
-  { value: '8', label: 'SIN INTERESES', annualRate: 0 },
   { value: '2', label: 'T. ACTIVA 30 DIAS BNA', annualRate: null },
   { value: '7', label: 'T. ACTIVA 30 DIAS BNA X 1,5', annualRate: null },
   { value: '14', label: 'T. ALIMENTOS ART.552 CCCN BCRA + T.A. BNA', annualRate: null },
+  { value: '15', label: 'T. INTERESES MORATORIOS (TIM) BCRA', annualRate: null },
   { value: '1', label: 'T. PASIVA USO JUSTICIA BCRA', annualRate: null }
 ];
+
+const OFFICIAL_RATE_CONFIG = {
+  '1': {
+    label: 'T. PASIVA USO JUSTICIA BCRA',
+    endpoint: 'calcular_tasa_pasiva.php'
+  },
+  '2': {
+    label: 'T. ACTIVA 30 DIAS BNA',
+    endpoint: 'calcular_tasa_activa.php'
+  },
+  '3': { label: '24%', endpoint: 'calcular_tasa_numerica.php' },
+  '4': { label: '32%', endpoint: 'calcular_tasa_numerica.php' },
+  '5': { label: '36%', endpoint: 'calcular_tasa_numerica.php' },
+  '6': { label: 'PACTADA', endpoint: 'calcular_tasa_pactada.php' },
+  '7': {
+    label: 'T. ACTIVA 30 DIAS BNA X 1,5',
+    endpoint: 'calcular_tasa_activa_15.php'
+  },
+  '9': { label: '48%', endpoint: 'calcular_tasa_numerica.php' },
+  '10': { label: '08%', endpoint: 'calcular_tasa_numerica.php' },
+  '11': { label: '56%', endpoint: 'calcular_tasa_numerica.php' },
+  '13': { label: '06%', endpoint: 'calcular_tasa_numerica.php' },
+  '14': {
+    label: 'T. ALIMENTOS ART.552 CCCN BCRA + T.A. BNA',
+    endpoint: 'calcular_tasa_alimentos.php'
+  },
+  '15': {
+    label: 'T. INTERESES MORATORIOS (TIM) BCRA',
+    endpoint: 'calcular_tasa_tim.php'
+  }
+};
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -223,7 +256,7 @@ function parseRateOptionsFromHtml(html) {
   }
 
   const selectMatch = html.match(
-    /<select[^>]*(?:id\s*=\s*["'][^"']*id_tipo_tasa[^"']*["']|name\s*=\s*["']id_tipo_tasa["'])[^>]*>([\s\S]*?)<\/select>/i
+    /<select[^>]*(?:id\s*=\s*["'](?:[^"']*id_tipo_tasa[^"']*|selTipoInteres)["']|name\s*=\s*["'](?:id_tipo_tasa|selTipoInteres)["'])[^>]*>([\s\S]*?)<\/select>/i
   );
 
   if (!selectMatch) {
@@ -260,7 +293,7 @@ function isRetryableOfficialError(error) {
     || code === 'ENOTFOUND';
 }
 
-function requestOfficialPageOnce({ method, path: requestPath, body, cookieHeader }) {
+function requestOfficialPageOnce({ method, path: requestPath, body }) {
   return new Promise((resolve, reject) => {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -270,10 +303,6 @@ function requestOfficialPageOnce({ method, path: requestPath, body, cookieHeader
       'Pragma': 'no-cache',
       'Connection': 'close'
     };
-
-    if (cookieHeader) {
-      headers.Cookie = cookieHeader;
-    }
 
     if (body) {
       headers['Content-Type'] = 'application/x-www-form-urlencoded';
@@ -293,7 +322,7 @@ function requestOfficialPageOnce({ method, path: requestPath, body, cookieHeader
       },
       (res) => {
         let raw = '';
-        res.setEncoding('latin1');
+        res.setEncoding('utf8');
         res.on('data', (chunk) => {
           raw += chunk;
         });
@@ -339,61 +368,10 @@ async function requestOfficialPage(params) {
   throw lastError || new Error('OFFICIAL_REQUEST_FAILED');
 }
 
-function extractFieldValue(html, fieldName) {
-  const pattern = new RegExp(`name=["']${fieldName}["']\\s+value=["']([^"']*)`, 'i');
-  const match = html.match(pattern);
-  return match ? cleanLabel(match[1]) : '';
-}
-
-function extractCookieHeader(headers) {
-  const setCookie = Array.isArray(headers['set-cookie']) ? headers['set-cookie'] : [];
-  return setCookie.map((cookieLine) => String(cookieLine).split(';')[0]).join('; ');
-}
-
-function toOfficialDate(dateLike) {
-  const raw = String(dateLike || '').trim();
-  if (!raw) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const [yyyy, mm, dd] = raw.split('-');
-    return `${dd}-${mm}-${yyyy}`;
-  }
-  if (/^\d{2}[/-]\d{2}[/-]\d{4}$/.test(raw)) {
-    return raw.replace(/\//g, '-');
-  }
-  return '';
-}
-
-function parseCalculationResult(html) {
-  const match = html.match(/<textarea[^>]*name=["']resultados["'][^>]*>([\s\S]*?)<\/textarea>/i);
-  const rawText = decodeHtmlEntities((match && match[1]) || '')
-    .replace(/\r/g, '')
-    .replace(/\n\s+/g, '\n')
-    .trim();
-
-  if (!rawText) {
-    throw new Error('OFFICIAL_RESULT_EMPTY');
-  }
-
-  const rateMatch = rawText.match(/Tasa:\s*([-\d.,]+)\s*%/i);
-  const interestMatch = rawText.match(/Intereses:\s*\$\s*([-\d.,]+)/i);
-  const daysMatch = rawText.match(/D[ií]as(?:\s+del\s+Per[ií]odo)?\s+calculado:\s*(\d+)/i);
-  const totalMatch = rawText.match(/Total\s*\([^)]+\):\s*\$\s*([-\d.,]+)/i);
-
-  return {
-    text: rawText,
-    parsed: {
-      ratePct: rateMatch ? parseLocalizedNumber(rateMatch[1]) : null,
-      interest: interestMatch ? parseLocalizedNumber(interestMatch[1]) : null,
-      days: daysMatch ? Number(daysMatch[1]) : null,
-      total: totalMatch ? parseLocalizedNumber(totalMatch[1]) : null
-    }
-  };
-}
-
 async function fetchOfficialRates() {
   const response = await requestOfficialPage({
     method: 'GET',
-    path: OFFICIAL_CALC_PATH
+    path: OFFICIAL_CALC_PAGE_PATH
   });
 
   if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -416,83 +394,95 @@ async function calculateOfficialChaco({
 }) {
   const amount = Number(importe);
   const rateTypeId = String(idTipoTasa || '').trim();
-  const fromDate = toOfficialDate(desde);
-  const toDate = toOfficialDate(hasta);
+  const fromDate = String(desde || '').trim();
+  const toDate = String(hasta || '').trim();
+  const rateConfig = OFFICIAL_RATE_CONFIG[rateTypeId];
 
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('MONTO_INVALIDO');
   }
-  if (!/^\d+$/.test(rateTypeId)) {
+  if (amount > 99999999999.99) {
+    throw new Error('MONTO_SUPERA_MAXIMO_OFICIAL');
+  }
+  if (!rateConfig) {
     throw new Error('TIPO_TASA_INVALIDO');
   }
-  if (!fromDate || !toDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
     throw new Error('FECHA_INVALIDA');
   }
-
-  const sessionResponse = await requestOfficialPage({
-    method: 'GET',
-    path: OFFICIAL_CALC_PATH
-  });
-
-  if (sessionResponse.statusCode < 200 || sessionResponse.statusCode >= 300) {
-    throw new Error(`HTTP_${sessionResponse.statusCode}`);
-  }
-
-  const scriptCaseInit = extractFieldValue(sessionResponse.body, 'script_case_init');
-  const csrfToken = extractFieldValue(sessionResponse.body, 'csrf_token');
-  const cookieHeader = extractCookieHeader(sessionResponse.headers);
-
-  if (!scriptCaseInit || !csrfToken || !cookieHeader) {
-    throw new Error('OFFICIAL_SESSION_INVALID');
+  if (toDate < fromDate) {
+    throw new Error('RANGO_FECHAS_INVALIDO');
   }
 
   const form = new URLSearchParams();
-  form.set('nm_form_submit', '1');
-  form.set('nmgp_idioma_novo', '');
-  form.set('nmgp_schema_f', '');
-  form.set('nmgp_url_saida', '');
-  form.set('bok', 'OK');
-  form.set('nmgp_opcao', 'alterar');
-  form.set('nmgp_ancora', '');
-  form.set('nmgp_num_form', '');
-  form.set('nmgp_parms', '');
-  form.set('script_case_init', scriptCaseInit);
-  form.set('NM_cancel_return_new', '');
-  form.set('csrf_token', csrfToken);
-  form.set('_sc_force_mobile', '');
-  form.set('importe', formatOfficialNumber(amount, 2));
+  form.set('importe', String(amount));
+  form.set('fecha_desde', fromDate);
+  form.set('fecha_hasta', toDate);
   form.set('id_tipo_tasa', rateTypeId);
-  form.set('desde', fromDate);
-  form.set('hasta', toDate);
+  form.set('descripcion_tipo', rateConfig.label);
 
   if (rateTypeId === '6') {
     const pactada = Number(tasaPactada);
     if (!Number.isFinite(pactada) || pactada <= 0) {
       throw new Error('TASA_PACTADA_INVALIDA');
     }
-    form.set('tasa_pactada', formatOfficialNumber(pactada, 4));
-  } else {
-    form.set('tasa_pactada', '');
+    form.set('tasa_pactada', String(pactada));
   }
-  form.set('resultados', '');
 
   const postResponse = await requestOfficialPage({
     method: 'POST',
-    path: OFFICIAL_CALC_PATH,
-    body: form.toString(),
-    cookieHeader
+    path: `${OFFICIAL_CALC_API_BASE}${rateConfig.endpoint}`,
+    body: form.toString()
   });
 
   if (postResponse.statusCode < 200 || postResponse.statusCode >= 300) {
     throw new Error(`HTTP_${postResponse.statusCode}`);
   }
 
-  const result = parseCalculationResult(postResponse.body || '');
+  let officialPayload;
+  try {
+    officialPayload = JSON.parse(postResponse.body || '{}');
+  } catch (_error) {
+    throw new Error('OFFICIAL_RESPONSE_INVALID');
+  }
+
+  if (!officialPayload || officialPayload.success !== true) {
+    throw new Error(
+      cleanLabel(officialPayload && officialPayload.error) || 'OFFICIAL_CALC_FAILED'
+    );
+  }
+
+  const rateText = String(officialPayload.tasa_periodo || officialPayload.tasa || '').replace('%', '');
+  const interest = parseLocalizedNumber(officialPayload.interes);
+  const total = parseLocalizedNumber(officialPayload.total);
+  const days = Number(officialPayload.dias);
+  const ratePct = parseLocalizedNumber(rateText);
+
+  if (!Number.isFinite(total)) {
+    throw new Error('OFFICIAL_TOTAL_INVALID');
+  }
+
+  const resultText = [
+    `Importe: $${officialPayload.importe_formateado || formatOfficialNumber(amount, 2)}`,
+    `Tipo de tasa: ${officialPayload.tipo || rateConfig.label}`,
+    `Desde: ${fromDate} Hasta: ${toDate}`,
+    `Tasa: ${officialPayload.tasa_periodo || officialPayload.tasa || ''}`,
+    `Intereses: $${officialPayload.interes || ''}`,
+    `Días del Período calculado: ${officialPayload.dias}`,
+    `Total (Importe + Intereses): $${officialPayload.total || ''}`
+  ].join('\n');
+
   return {
     ok: true,
     source: 'official_engine',
     updatedAt: new Date().toISOString(),
-    ...result
+    text: resultText,
+    parsed: {
+      ratePct,
+      interest,
+      days: Number.isFinite(days) ? days : null,
+      total
+    }
   };
 }
 

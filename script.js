@@ -155,10 +155,10 @@ var FALLBACK_RATES = [
   { value: '9', label: '48%', annualRate: 48 },
   { value: '11', label: '56%', annualRate: 56 },
   { value: '6', label: 'PACTADA', annualRate: null },
-  { value: '8', label: 'SIN INTERESES', annualRate: 0 },
   { value: '2', label: 'T. ACTIVA 30 DIAS BNA', annualRate: null },
   { value: '7', label: 'T. ACTIVA 30 DIAS BNA X 1,5', annualRate: null },
   { value: '14', label: 'T. ALIMENTOS ART.552 CCCN BCRA + T.A. BNA', annualRate: null },
+  { value: '15', label: 'T. INTERESES MORATORIOS (TIM) BCRA', annualRate: null },
   { value: '1', label: 'T. PASIVA USO JUSTICIA BCRA', annualRate: null }
 ];
 
@@ -459,6 +459,7 @@ async function handleCalculatorSubmit(e) {
   var selectedRateOption = rateTypeEl ? rateTypeEl.options[rateTypeEl.selectedIndex] : null;
   var selectedRateLabel = selectedRateOption ? selectedRateOption.textContent : 'Personalizada (manual)';
   var selectedRateValue = selectedRateOption ? String(selectedRateOption.value || '') : 'custom';
+  var selectedRateFallback = selectedRateOption ? selectedRateOption.getAttribute('data-rate') : '';
   var isOfficialRate = isOfficialRateValue(selectedRateValue);
   var isPactadaOfficial = selectedRateValue === '6';
 
@@ -555,19 +556,28 @@ async function handleCalculatorSubmit(e) {
       payload.tasaPactada = annualRate;
     }
 
-    var response = await fetch('/api/tasas/chaco/calcular', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
+    var calcController = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var calcTimer = calcController ? setTimeout(function () { calcController.abort(); }, 20000) : null;
+    var response;
+
+    try {
+      response = await fetch('/api/tasas/chaco/calcular', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: calcController ? calcController.signal : undefined
+      });
+    } finally {
+      if (calcTimer !== null) clearTimeout(calcTimer);
+    }
 
     var data = await response.json().catch(function () { return {}; });
     if (!response.ok || !data || data.ok !== true) {
       var backendError = (data && data.error) || ('HTTP_' + response.status);
       if (response.status === 404) {
-        throw new Error('Endpoint de cálculo no disponible (HTTP_404). Reinicie con \"node server.js\" y abra http://127.0.0.1:5500/index.html');
+        throw new Error('El servicio de cálculo no está disponible en este momento (HTTP_404).');
       }
       throw new Error('No se pudo calcular con la fuente oficial (' + backendError + ').');
     }
@@ -619,15 +629,23 @@ async function handleCalculatorSubmit(e) {
     // Iniciar animación (2 segundos para dar más dramatismo al cálculo oficial)
     animateCurrency('calcTotalResult', totalOfficial, 2000);
   } catch (error) {
-    var canUseManualFallback = isFinite(annualRate) && annualRate >= 0;
+    var fallbackAnnualRate = isPactadaOfficial ? annualRate : Number(selectedRateFallback);
+    var canUseManualFallback = selectedRateFallback !== ''
+      && isFinite(fallbackAnnualRate)
+      && fallbackAnnualRate >= 0;
+
+    if (isPactadaOfficial) {
+      canUseManualFallback = isFinite(fallbackAnnualRate) && fallbackAnnualRate > 0;
+    }
+
     if (canUseManualFallback) {
-      var interestFallback = principal * (annualRate / 100) * (days / 365);
+      var interestFallback = principal * (fallbackAnnualRate / 100) * (days / 365);
       var updatedFallback = principal + interestFallback;
       var honorFallback = updatedFallback * (honorPct / 100);
       var totalFallback = updatedFallback + honorFallback;
       var honorRowFallback = '';
       var rateFallbackLabel = isPactadaOfficial
-        ? (annualRate.toFixed(4).replace('.', ',') + '% (PACTADA manual)')
+        ? (fallbackAnnualRate.toFixed(4).replace('.', ',') + '% (PACTADA manual)')
         : (selectedRateLabel + ' (estimación manual)');
 
       if (honorPct > 0) {
@@ -655,7 +673,10 @@ async function handleCalculatorSubmit(e) {
       );
       animateCurrency('calcTotalResult', totalFallback, 1500);
     } else {
-      renderCalculatorError((error && error.message) ? (error.message + ' Puede usar \"Personalizada (manual)\" como alternativa.') : 'Error al calcular con la fuente oficial.');
+      var errorMessage = error && error.name === 'AbortError'
+        ? 'La fuente oficial demoró demasiado y se canceló la consulta.'
+        : ((error && error.message) ? error.message : 'Error al calcular con la fuente oficial.');
+      renderCalculatorError(errorMessage + ' Revise el período elegido o use \"Personalizada (manual)\" como alternativa.');
     }
   } finally {
     calculatorState.isCalculating = false;
