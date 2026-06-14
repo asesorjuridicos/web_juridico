@@ -20,10 +20,14 @@ const VISIT_DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000;
 const OFFICIAL_HOST = 'www.justiciachaco.gov.ar';
 const OFFICIAL_CALC_PAGE_PATH = '/index.php?action=calculadora';
 const OFFICIAL_CALC_API_BASE = '/views/modules/profesionales/calcula_tasas/';
+const OFFICIAL_CALC_PROXY_URL = String(
+  process.env.OFFICIAL_CALC_PROXY_URL
+    || 'https://tasas-chaco-proxy.asesoresjuridicosinmo.workers.dev/calculate'
+).trim();
 const OFFICIAL_REQUEST_TIMEOUT_MS = (() => {
   const raw = Number(process.env.OFFICIAL_REQUEST_TIMEOUT_MS);
   if (!Number.isFinite(raw)) return 5000;
-  return Math.max(5000, Math.min(120000, Math.floor(raw)));
+  return Math.max(1000, Math.min(120000, Math.floor(raw)));
 })();
 const OFFICIAL_REQUEST_RETRIES = (() => {
   const raw = Number(process.env.OFFICIAL_REQUEST_RETRIES);
@@ -404,6 +408,49 @@ async function fetchOfficialRates() {
   return items;
 }
 
+function requestOfficialProxy(payload) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(OFFICIAL_CALC_PROXY_URL);
+    const body = JSON.stringify(payload);
+    const req = https.request(
+      {
+        protocol: target.protocol,
+        hostname: target.hostname,
+        port: target.port || 443,
+        path: `${target.pathname}${target.search}`,
+        method: 'POST',
+        timeout: OFFICIAL_REQUEST_TIMEOUT_MS,
+        headers: {
+          accept: 'application/json',
+          'content-type': 'application/json',
+          'content-length': Buffer.byteLength(body),
+          'user-agent': 'web-juridico/1.0'
+        }
+      },
+      (res) => {
+        let raw = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode || 0,
+            body: raw
+          });
+        });
+      }
+    );
+
+    req.on('timeout', () => {
+      req.destroy(new Error('PROXY_TIMEOUT'));
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 async function calculateOfficialChaco({
   importe,
   idTipoTasa,
@@ -433,34 +480,35 @@ async function calculateOfficialChaco({
     throw new Error('RANGO_FECHAS_INVALIDO');
   }
 
-  const form = new URLSearchParams();
-  form.set('importe', String(amount));
-  form.set('fecha_desde', fromDate);
-  form.set('fecha_hasta', toDate);
-  form.set('id_tipo_tasa', rateTypeId);
-  form.set('descripcion_tipo', rateConfig.label);
-
+  let agreedRate = null;
   if (rateTypeId === '6') {
     const pactada = Number(tasaPactada);
     if (!Number.isFinite(pactada) || pactada <= 0) {
       throw new Error('TASA_PACTADA_INVALIDA');
     }
-    form.set('tasa_pactada', String(pactada));
+    agreedRate = pactada;
   }
 
-  const postResponse = await requestOfficialPage({
-    method: 'POST',
-    path: `${OFFICIAL_CALC_API_BASE}${rateConfig.endpoint}`,
-    body: form.toString()
+  const proxyResponse = await requestOfficialProxy({
+    idTipoTasa: rateTypeId,
+    desde: fromDate,
+    hasta: toDate,
+    tasaPactada: agreedRate
   });
 
-  if (postResponse.statusCode < 200 || postResponse.statusCode >= 300) {
-    throw new Error(`HTTP_${postResponse.statusCode}`);
+  if (proxyResponse.statusCode < 200 || proxyResponse.statusCode >= 300) {
+    let proxyError = '';
+    try {
+      proxyError = cleanLabel(JSON.parse(proxyResponse.body || '{}').error);
+    } catch (_error) {
+      proxyError = '';
+    }
+    throw new Error(proxyError || `PROXY_HTTP_${proxyResponse.statusCode}`);
   }
 
   let officialPayload;
   try {
-    officialPayload = JSON.parse(postResponse.body || '{}');
+    officialPayload = JSON.parse(proxyResponse.body || '{}');
   } catch (_error) {
     throw new Error('OFFICIAL_RESPONSE_INVALID');
   }
@@ -472,28 +520,32 @@ async function calculateOfficialChaco({
   }
 
   const rateText = String(officialPayload.tasa_periodo || officialPayload.tasa || '').replace('%', '');
-  const interest = parseLocalizedNumber(officialPayload.interes);
-  const total = parseLocalizedNumber(officialPayload.total);
   const days = Number(officialPayload.dias);
   const ratePct = parseLocalizedNumber(rateText);
+  const interest = Number.isFinite(ratePct)
+    ? Number((amount * ratePct / 100).toFixed(2))
+    : null;
+  const total = Number.isFinite(interest)
+    ? Number((amount + interest).toFixed(2))
+    : null;
 
-  if (!Number.isFinite(total)) {
+  if (!Number.isFinite(ratePct) || !Number.isFinite(total)) {
     throw new Error('OFFICIAL_TOTAL_INVALID');
   }
 
   const resultText = [
-    `Importe: $${officialPayload.importe_formateado || formatOfficialNumber(amount, 2)}`,
+    `Importe: $${formatOfficialNumber(amount, 2)}`,
     `Tipo de tasa: ${officialPayload.tipo || rateConfig.label}`,
     `Desde: ${fromDate} Hasta: ${toDate}`,
     `Tasa: ${officialPayload.tasa_periodo || officialPayload.tasa || ''}`,
-    `Intereses: $${officialPayload.interes || ''}`,
+    `Intereses: $${formatOfficialNumber(interest, 2)}`,
     `Días del Período calculado: ${officialPayload.dias}`,
-    `Total (Importe + Intereses): $${officialPayload.total || ''}`
+    `Total (Importe + Intereses): $${formatOfficialNumber(total, 2)}`
   ].join('\n');
 
   return {
     ok: true,
-    source: 'official_engine',
+    source: 'official_engine_proxy',
     updatedAt: new Date().toISOString(),
     text: resultText,
     parsed: {
