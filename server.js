@@ -1,5 +1,6 @@
 ﻿const http = require('http');
 const https = require('https');
+const dns = require('dns');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -21,12 +22,12 @@ const OFFICIAL_CALC_PAGE_PATH = '/index.php?action=calculadora';
 const OFFICIAL_CALC_API_BASE = '/views/modules/profesionales/calcula_tasas/';
 const OFFICIAL_REQUEST_TIMEOUT_MS = (() => {
   const raw = Number(process.env.OFFICIAL_REQUEST_TIMEOUT_MS);
-  if (!Number.isFinite(raw)) return 8000;
+  if (!Number.isFinite(raw)) return 5000;
   return Math.max(5000, Math.min(120000, Math.floor(raw)));
 })();
 const OFFICIAL_REQUEST_RETRIES = (() => {
   const raw = Number(process.env.OFFICIAL_REQUEST_RETRIES);
-  if (!Number.isFinite(raw)) return 1;
+  if (!Number.isFinite(raw)) return 2;
   return Math.max(0, Math.min(4, Math.floor(raw)));
 })();
 const OFFICIAL_RETRY_DELAY_MS = (() => {
@@ -293,9 +294,10 @@ function isRetryableOfficialError(error) {
     || code === 'ENOTFOUND';
 }
 
-function requestOfficialPageOnce({ method, path: requestPath, body }) {
+function requestOfficialPageOnce({ method, path: requestPath, body, address }) {
   return new Promise((resolve, reject) => {
     const headers = {
+      'Host': OFFICIAL_HOST,
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'es-AR,es;q=0.9,en;q=0.8',
@@ -312,7 +314,8 @@ function requestOfficialPageOnce({ method, path: requestPath, body }) {
     const req = https.request(
       {
         protocol: 'https:',
-        hostname: OFFICIAL_HOST,
+        hostname: address || OFFICIAL_HOST,
+        servername: OFFICIAL_HOST,
         path: requestPath,
         method,
         family: 4,
@@ -352,13 +355,29 @@ function requestOfficialPageOnce({ method, path: requestPath, body }) {
 
 async function requestOfficialPage(params) {
   let lastError = null;
+  let addresses = [];
 
-  for (let attempt = 0; attempt <= OFFICIAL_REQUEST_RETRIES; attempt += 1) {
+  try {
+    addresses = await dns.promises.resolve4(OFFICIAL_HOST);
+  } catch (_error) {
+    addresses = [];
+  }
+
+  const candidates = Array.from(new Set(addresses));
+  if (!candidates.length) {
+    candidates.push(null);
+  }
+
+  const maxAttempts = Math.min(candidates.length, OFFICIAL_REQUEST_RETRIES + 1);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      return await requestOfficialPageOnce(params);
+      return await requestOfficialPageOnce({
+        ...params,
+        address: candidates[attempt]
+      });
     } catch (error) {
       lastError = error;
-      if (attempt >= OFFICIAL_REQUEST_RETRIES || !isRetryableOfficialError(error)) {
+      if (attempt >= maxAttempts - 1 || !isRetryableOfficialError(error)) {
         throw error;
       }
       await wait(OFFICIAL_RETRY_DELAY_MS * (attempt + 1));
