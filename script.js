@@ -1669,13 +1669,19 @@ function handleContactSubmit(e) {
     website: String(formData.get('website') || formData.get('_honey') || '').trim()
   };
 
+  var abortController = typeof AbortController === 'function' ? new AbortController() : null;
+  var abortTimer = abortController
+    ? setTimeout(function () { abortController.abort(); }, 25000)
+    : null;
+
   fetch('/api/contacto', {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal: abortController ? abortController.signal : undefined
   })
     .then(function (res) {
       return res
@@ -1719,16 +1725,22 @@ function handleContactSubmit(e) {
         }
       }
     })
-    .catch(function () {
+    .catch(function (error) {
+      var isTimeout = error && error.name === 'AbortError';
       if (btn) {
         btn.textContent = 'Error al enviar';
       }
       if (status) {
-        status.textContent = 'Error de conexion. Verifique internet e intente nuevamente.';
+        status.textContent = isTimeout
+          ? 'El envio demoro demasiado. Escribanos a asesoresjuridicosinmo@gmail.com o por WhatsApp.'
+          : 'Error de conexion. Verifique internet e intente nuevamente.';
         status.classList.add('error');
       }
     })
     .finally(function () {
+      if (abortTimer) {
+        clearTimeout(abortTimer);
+      }
       setTimeout(function () {
         if (btn) {
           btn.disabled = false;

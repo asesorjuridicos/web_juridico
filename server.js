@@ -50,6 +50,8 @@ const SMTP_PASS = String(process.env.SMTP_PASS || '').trim();
 const CONTACT_TO_EMAIL = String(process.env.CONTACT_TO_EMAIL || process.env.SMTP_USER || '').trim();
 const CONTACT_FROM_EMAIL = String(process.env.CONTACT_FROM_EMAIL || process.env.SMTP_USER || '').trim();
 const CONTACT_SUBJECT_PREFIX = String(process.env.CONTACT_SUBJECT_PREFIX || '[Web Juridico]').trim();
+const SMTP_CONNECTION_TIMEOUT_MS = Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000);
+const SMTP_SOCKET_TIMEOUT_MS = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 15000);
 const contactRateBuckets = new Map();
 let smtpTransporterPromise = null;
 let visitsUpdateQueue = Promise.resolve();
@@ -862,7 +864,12 @@ async function getSmtpTransporter() {
       auth: {
         user: SMTP_USER,
         pass: SMTP_PASS
-      }
+      },
+      // Sin estos limites, si el proveedor bloquea el puerto SMTP saliente
+      // la conexion queda colgada y el formulario nunca responde.
+      connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+      greetingTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+      socketTimeout: SMTP_SOCKET_TIMEOUT_MS
     });
     await transporter.verify();
     return transporter;
@@ -993,11 +1000,21 @@ async function handleContactRequest(req, res) {
       return;
     }
 
-    console.error('CONTACT_EMAIL_ERROR', error && error.message ? error.message : error);
+    const code = error && error.code ? String(error.code) : '';
+    const isSmtpUnreachable = code === 'ETIMEDOUT' || code === 'ECONNECTION' || code === 'ESOCKET';
+
+    console.error(
+      'CONTACT_EMAIL_ERROR',
+      code || 'SIN_CODIGO',
+      error && error.message ? error.message : error
+    );
+
     sendJson(res, 502, {
       ok: false,
-      error: 'EMAIL_SEND_FAILED',
-      message: 'No se pudo enviar la consulta. Intente nuevamente.'
+      error: isSmtpUnreachable ? 'EMAIL_SMTP_UNREACHABLE' : 'EMAIL_SEND_FAILED',
+      message: isSmtpUnreachable
+        ? 'No pudimos conectar con el servidor de correo. Escribanos a ' + (CONTACT_TO_EMAIL || 'nuestro email') + ' o por WhatsApp.'
+        : 'No se pudo enviar la consulta. Intente nuevamente.'
     });
   }
 }
