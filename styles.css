@@ -426,7 +426,8 @@ ul, ol { list-style: none; }
   .hero-grid {
     grid-template-columns: minmax(0, 1fr) 320px;
     gap: 2.5rem;
-    align-items: center;
+    /* La insignia sube al tope de la columna, justo debajo de la franja */
+    align-items: start;
   }
 }
 
@@ -442,17 +443,23 @@ ul, ol { list-style: none; }
   margin: 0 auto;
 }
 
-.hero-flag-stripe {
+/* Franja de la bandera a todo el ancho, pegada al borde superior del hero */
+.hero-flag-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 7px;
   display: flex;
-  height: 8px;
+  z-index: 30;
 }
 
-.hero-flag-stripe span {
+.hero-flag-band span {
   flex: 1;
   background: #74acdf;
 }
 
-.hero-flag-stripe span:nth-child(2) {
+.hero-flag-band span:nth-child(2) {
   background: #ffffff;
 }
 
