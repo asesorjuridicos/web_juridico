@@ -1638,6 +1638,29 @@ function showLocalServerRequiredStatus(btn, status) {
 var CONTACT_ENDPOINT = 'https://api.web3forms.com/submit';
 var CONTACT_ACCESS_KEY = 'ceb768b5-b675-4a15-81b7-4da302e2afc8';
 
+// Envia un evento a Google Analytics si esta disponible. Si el visitante
+// bloquea la analitica, la web sigue funcionando igual.
+function registrarEvento(nombre, datos) {
+  try {
+    if (typeof gtag === 'function') {
+      gtag('event', nombre, datos || {});
+    }
+  } catch (error) {
+    // la medicion nunca debe interrumpir al visitante
+  }
+}
+
+// Cuenta los clics en los botones de WhatsApp, que son el canal principal
+// de contacto del estudio.
+document.addEventListener('click', function (e) {
+  var enlace = e.target && e.target.closest ? e.target.closest('a[href*="wa.me"]') : null;
+  if (enlace) {
+    registrarEvento('contacto_whatsapp', {
+      origen: enlace.classList.contains('whatsapp-float') ? 'boton_flotante' : 'enlace_pagina'
+    });
+  }
+});
+
 // Aviso interno por WhatsApp. Es accesorio: se dispara despues de que la
 // consulta ya salio por correo y cualquier fallo se ignora en silencio.
 function notifyWhatsapp(nombre, email, consulta) {
@@ -1734,6 +1757,7 @@ function handleContactSubmit(e) {
           status.textContent = 'Consulta enviada. Le responderemos pronto.';
           status.classList.add('success');
         }
+        registrarEvento('generate_lead', { method: 'formulario_contacto' });
         notifyWhatsapp(nombre, email, consulta);
         form.reset();
       } else {
