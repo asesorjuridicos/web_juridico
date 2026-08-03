@@ -1633,6 +1633,11 @@ function showLocalServerRequiredStatus(btn, status) {
   }
 }
 
+// Servicio de entrega del formulario de contacto. La access key es publica:
+// Web3Forms la publica en el HTML del cliente en su propia documentacion.
+var CONTACT_ENDPOINT = 'https://api.web3forms.com/submit';
+var CONTACT_ACCESS_KEY = 'ceb768b5-b675-4a15-81b7-4da302e2afc8';
+
 function handleContactSubmit(e) {
   e.preventDefault();
 
@@ -1662,11 +1667,22 @@ function handleContactSubmit(e) {
     return;
   }
 
+  var nombre = String(formData.get('nombre') || '').trim();
+  var email = String(formData.get('email') || '').trim();
+  var consulta = String(formData.get('consulta') || '').trim();
+  var honeypot = String(formData.get('website') || formData.get('_honey') || '').trim();
+
+  // El envio va directo desde el navegador a Web3Forms: el plan gratuito solo
+  // acepta solicitudes del lado del cliente. La access key es publica por diseno.
   var payload = {
-    nombre: String(formData.get('nombre') || '').trim(),
-    email: String(formData.get('email') || '').trim(),
-    consulta: String(formData.get('consulta') || '').trim(),
-    website: String(formData.get('website') || formData.get('_honey') || '').trim()
+    access_key: CONTACT_ACCESS_KEY,
+    subject: 'Nueva consulta de ' + nombre,
+    from_name: 'Web Juridico',
+    replyto: email,
+    botcheck: honeypot ? true : false,
+    Nombre: nombre,
+    Email: email,
+    Consulta: consulta
   };
 
   var abortController = typeof AbortController === 'function' ? new AbortController() : null;
@@ -1674,7 +1690,7 @@ function handleContactSubmit(e) {
     ? setTimeout(function () { abortController.abort(); }, 25000)
     : null;
 
-  fetch('/api/contacto', {
+  fetch(CONTACT_ENDPOINT, {
     method: 'POST',
     headers: {
       'Accept': 'application/json',
@@ -1693,27 +1709,26 @@ function handleContactSubmit(e) {
     })
     .then(function (result) {
       var data = result.data || {};
-      var isSuccess = result.ok && data.ok !== false;
+      var isSuccess = result.ok && data.success !== false;
 
       if (isSuccess) {
         if (btn) {
           btn.textContent = '✓ Consulta enviada';
         }
         if (status) {
-          status.textContent = data.message || 'Consulta enviada. Le responderemos pronto.';
+          status.textContent = 'Consulta enviada. Le responderemos pronto.';
           status.classList.add('success');
         }
         form.reset();
       } else {
-        var errorMessage = 'No se pudo enviar la consulta. Intente nuevamente.';
-        if (typeof data.message === 'string' && data.message.trim() !== '') {
-          errorMessage = data.message.trim();
-        } else if (result.status === 404) {
-          errorMessage = 'Servidor desactualizado. Reinicie con "npm start" para habilitar /api/contacto.';
-        } else if (result.status === 429) {
+        // La respuesta de error del servicio viene en ingles: se muestra un
+        // mensaje propio y se deja el detalle en consola para diagnostico.
+        var errorMessage = 'No se pudo enviar la consulta. Escribanos a asesoresjuridicosinmo@gmail.com o por WhatsApp.';
+        if (result.status === 429) {
           errorMessage = 'Demasiados intentos. Espere unos minutos.';
-        } else if (result.status === 503) {
-          errorMessage = 'Servicio de correo no configurado en el servidor.';
+        }
+        if (data.message) {
+          console.error('CONTACT_SEND_ERROR', result.status, data.message);
         }
 
         if (btn) {

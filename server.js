@@ -52,12 +52,9 @@ const CONTACT_FROM_EMAIL = String(process.env.CONTACT_FROM_EMAIL || process.env.
 const CONTACT_SUBJECT_PREFIX = String(process.env.CONTACT_SUBJECT_PREFIX || '[Web Juridico]').trim();
 const SMTP_CONNECTION_TIMEOUT_MS = Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 10000);
 const SMTP_SOCKET_TIMEOUT_MS = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 15000);
-// Envio por HTTPS (Web3Forms). Se usa cuando hay clave configurada, porque los
-// planes gratuitos de Render bloquean los puertos SMTP salientes.
-const WEB3FORMS_ACCESS_KEY = String(process.env.WEB3FORMS_ACCESS_KEY || '').trim();
-const WEB3FORMS_HOST = 'api.web3forms.com';
-const WEB3FORMS_PATH = '/submit';
-const WEB3FORMS_TIMEOUT_MS = Number(process.env.WEB3FORMS_TIMEOUT_MS || 15000);
+// Nota: el formulario de la web ya no usa esta ruta. Envia directo a Web3Forms
+// desde el navegador, porque su plan gratuito rechaza las solicitudes hechas
+// desde un servidor. Esta ruta se mantiene para pruebas locales via SMTP.
 const contactRateBuckets = new Map();
 let smtpTransporterPromise = null;
 let visitsUpdateQueue = Promise.resolve();
@@ -788,58 +785,8 @@ function normalizeMultiline(value, maxLength) {
     .slice(0, maxLength);
 }
 
-function isSmtpConfigured() {
-  return Boolean(SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && CONTACT_TO_EMAIL && CONTACT_FROM_EMAIL);
-}
-
 function isEmailConfigured() {
-  return Boolean(WEB3FORMS_ACCESS_KEY) || isSmtpConfigured();
-}
-
-function postJsonHttps(hostname, requestPath, payload, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify(payload);
-    const req = https.request(
-      {
-        hostname,
-        path: requestPath,
-        method: 'POST',
-        timeout: timeoutMs,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Content-Length': Buffer.byteLength(body)
-        }
-      },
-      (res) => {
-        let raw = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          raw += chunk;
-        });
-        res.on('end', () => {
-          let parsed = {};
-          try {
-            parsed = raw ? JSON.parse(raw) : {};
-          } catch (error) {
-            parsed = {};
-          }
-          resolve({
-            statusCode: res.statusCode || 0,
-            body: parsed,
-            raw
-          });
-        });
-      }
-    );
-
-    req.on('timeout', () => {
-      req.destroy(new Error('HTTP_TIMEOUT'));
-    });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
+  return Boolean(SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && CONTACT_TO_EMAIL && CONTACT_FROM_EMAIL);
 }
 
 function cleanupContactRateBuckets(nowMs) {
@@ -903,42 +850,12 @@ function validateContactPayload(body) {
   };
 }
 
-async function sendContactViaWeb3Forms({ nombre, email, consulta }, meta) {
-  const response = await postJsonHttps(
-    WEB3FORMS_HOST,
-    WEB3FORMS_PATH,
-    {
-      access_key: WEB3FORMS_ACCESS_KEY,
-      subject: `${CONTACT_SUBJECT_PREFIX} Nueva consulta de ${nombre}`,
-      from_name: 'Web Juridico',
-      replyto: email,
-      Nombre: nombre,
-      Email: email,
-      Consulta: consulta,
-      IP: (meta && meta.ip) || 'unknown',
-      Navegador: (meta && meta.userAgent) || 'unknown',
-      Fecha: new Date().toISOString()
-    },
-    WEB3FORMS_TIMEOUT_MS
-  );
-
-  const data = response.body || {};
-  if (response.statusCode < 200 || response.statusCode >= 300 || data.success === false) {
-    const detail = data.message || `HTTP_${response.statusCode}`;
-    const error = new Error(`WEB3FORMS_REJECTED: ${detail}`);
-    error.code = 'WEB3FORMS_REJECTED';
-    throw error;
-  }
-
-  return { messageId: data.message || 'web3forms-ok' };
-}
-
 async function getSmtpTransporter() {
   if (smtpTransporterPromise) {
     return smtpTransporterPromise;
   }
 
-  if (!isSmtpConfigured()) {
+  if (!isEmailConfigured()) {
     throw new Error('EMAIL_NOT_CONFIGURED');
   }
 
@@ -970,10 +887,6 @@ async function getSmtpTransporter() {
 }
 
 async function sendContactEmail({ nombre, email, consulta }, meta) {
-  if (WEB3FORMS_ACCESS_KEY) {
-    return sendContactViaWeb3Forms({ nombre, email, consulta }, meta);
-  }
-
   const transporter = await getSmtpTransporter();
   const subject = `${CONTACT_SUBJECT_PREFIX} Nueva consulta de ${nombre}`;
   const ip = escapeHtml((meta && meta.ip) || 'unknown');
@@ -1091,8 +1004,7 @@ async function handleContactRequest(req, res) {
     }
 
     const code = error && error.code ? String(error.code) : '';
-    const isSmtpUnreachable =
-      code === 'ETIMEDOUT' || code === 'ECONNECTION' || code === 'ESOCKET' || code === 'WEB3FORMS_REJECTED';
+    const isSmtpUnreachable = code === 'ETIMEDOUT' || code === 'ECONNECTION' || code === 'ESOCKET';
 
     console.error(
       'CONTACT_EMAIL_ERROR',
