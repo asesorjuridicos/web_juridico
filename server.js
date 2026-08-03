@@ -55,6 +55,13 @@ const SMTP_SOCKET_TIMEOUT_MS = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 1500
 // Nota: el formulario de la web ya no usa esta ruta. Envia directo a Web3Forms
 // desde el navegador, porque su plan gratuito rechaza las solicitudes hechas
 // desde un servidor. Esta ruta se mantiene para pruebas locales via SMTP.
+
+// Aviso por WhatsApp (CallMeBot). El correo sigue siendo el canal principal:
+// esto es solo una notificacion, y si falla no afecta el envio de la consulta.
+const WHATSAPP_ALERT_PATHS = new Set(['/api/aviso-whatsapp', '/api/aviso-whatsapp/']);
+const CALLMEBOT_PHONE = String(process.env.CALLMEBOT_PHONE || '').trim();
+const CALLMEBOT_APIKEY = String(process.env.CALLMEBOT_APIKEY || '').trim();
+const CALLMEBOT_TIMEOUT_MS = Number(process.env.CALLMEBOT_TIMEOUT_MS || 8000);
 const contactRateBuckets = new Map();
 let smtpTransporterPromise = null;
 let visitsUpdateQueue = Promise.resolve();
@@ -930,6 +937,100 @@ async function sendContactEmail({ nombre, email, consulta }, meta) {
   return info;
 }
 
+function isWhatsappAlertConfigured() {
+  return Boolean(CALLMEBOT_PHONE && CALLMEBOT_APIKEY);
+}
+
+function httpsGetText(url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { timeout: timeoutMs }, (res) => {
+      let raw = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        raw += chunk;
+      });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode || 0, body: raw });
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy(new Error('HTTP_TIMEOUT'));
+    });
+    req.on('error', reject);
+  });
+}
+
+async function sendWhatsappAlert({ nombre, email, consulta }) {
+  const resumen = consulta.length > 400 ? `${consulta.slice(0, 400)}...` : consulta;
+  const texto = [
+    '*Nueva consulta en la web*',
+    '',
+    `*Nombre:* ${nombre}`,
+    `*Email:* ${email}`,
+    '',
+    resumen
+  ].join('\n');
+
+  const url =
+    'https://api.callmebot.com/whatsapp.php'
+    + `?phone=${encodeURIComponent(CALLMEBOT_PHONE)}`
+    + `&apikey=${encodeURIComponent(CALLMEBOT_APIKEY)}`
+    + `&text=${encodeURIComponent(texto)}`;
+
+  const response = await httpsGetText(url, CALLMEBOT_TIMEOUT_MS);
+  // CallMeBot responde 200/203 tanto al aceptar como al rechazar: el motivo
+  // real viene en el cuerpo (por ejemplo "APIKey is invalid").
+  const detalle = String(response.body || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const rechazado = /invalid|error|not registered|expired|missing/i.test(detalle);
+
+  if (response.statusCode !== 200 || rechazado) {
+    throw new Error(`CALLMEBOT_REJECTED (HTTP ${response.statusCode}): ${detalle.slice(0, 200)}`);
+  }
+  return detalle;
+}
+
+async function handleWhatsappAlertRequest(req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' });
+    return;
+  }
+
+  // El aviso es accesorio: nunca devuelve error al visitante, porque su
+  // consulta ya se envio por correo antes de llegar aca.
+  if (!isWhatsappAlertConfigured()) {
+    sendJson(res, 200, { ok: true, skipped: 'NOT_CONFIGURED' });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { ok: false, error: 'INVALID_REQUEST' });
+    return;
+  }
+
+  if (isContactRateLimited(getClientIp(req))) {
+    sendJson(res, 200, { ok: true, skipped: 'RATE_LIMIT' });
+    return;
+  }
+
+  const validation = validateContactPayload(body);
+  if (validation.isSpam || validation.errors.length) {
+    sendJson(res, 200, { ok: true, skipped: 'INVALID_PAYLOAD' });
+    return;
+  }
+
+  try {
+    await sendWhatsappAlert(validation.cleaned);
+    sendJson(res, 200, { ok: true });
+  } catch (error) {
+    console.error('WHATSAPP_ALERT_ERROR', error && error.message ? error.message : error);
+    sendJson(res, 200, { ok: false, error: 'WHATSAPP_ALERT_FAILED' });
+  }
+}
+
 async function handleContactRequest(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, {
@@ -1097,6 +1198,11 @@ const server = http.createServer(async (req, res) => {
 
   if (CONTACT_ROUTE_PATHS.has(pathname)) {
     await handleContactRequest(req, res);
+    return;
+  }
+
+  if (WHATSAPP_ALERT_PATHS.has(pathname)) {
+    await handleWhatsappAlertRequest(req, res);
     return;
   }
 

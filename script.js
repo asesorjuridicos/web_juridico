@@ -1638,6 +1638,21 @@ function showLocalServerRequiredStatus(btn, status) {
 var CONTACT_ENDPOINT = 'https://api.web3forms.com/submit';
 var CONTACT_ACCESS_KEY = 'ceb768b5-b675-4a15-81b7-4da302e2afc8';
 
+// Aviso interno por WhatsApp. Es accesorio: se dispara despues de que la
+// consulta ya salio por correo y cualquier fallo se ignora en silencio.
+function notifyWhatsapp(nombre, email, consulta) {
+  try {
+    fetch('/api/aviso-whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre, email: email, consulta: consulta }),
+      keepalive: true
+    }).catch(function () {});
+  } catch (error) {
+    // sin efecto para el visitante
+  }
+}
+
 function handleContactSubmit(e) {
   e.preventDefault();
 
@@ -1719,6 +1734,7 @@ function handleContactSubmit(e) {
           status.textContent = 'Consulta enviada. Le responderemos pronto.';
           status.classList.add('success');
         }
+        notifyWhatsapp(nombre, email, consulta);
         form.reset();
       } else {
         // La respuesta de error del servicio viene en ingles: se muestra un
