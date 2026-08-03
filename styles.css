@@ -435,7 +435,9 @@ ul, ol { list-style: none; }
 .hero-flag-card {
   position: absolute;
   top: 26px;
-  right: 3rem;
+  /* Alineada con el borde derecho del contenido, donde termina "Contacto"
+     del menu: misma cuenta que hace .container (max-width 1120 + padding). */
+  right: max(2rem, calc((100% - 1120px) / 2 + 2rem));
   z-index: 25;
   max-width: 320px;
   text-align: center;
@@ -492,7 +494,7 @@ ul, ol { list-style: none; }
 @media (max-width: 1099px) {
   .hero-flag-card {
     top: 20px;
-    right: 1.25rem;
+    right: 1.5rem;
     max-width: 200px;
   }
 
