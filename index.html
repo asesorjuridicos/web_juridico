@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="styles.css?v=20260308-5" />
+  <link rel="stylesheet" href="styles.css?v=20260802-1" />
 </head>
 <body>
 
@@ -92,73 +92,8 @@
               <div class="hero-buttons reveal reveal-delay-4">
                 <a href="https://wa.me/543644388960?text=Hola%2C%20quisiera%20agendar%20una%20consulta%20confidencial%20sobre%20mi%20caso." target="_blank" rel="noopener noreferrer" class="btn-gold">Asegurar mi Victoria</a>
                 <a href="#especialidades" class="btn-gold-outline">Especialidades de Élite</a>
-                <button
-                  type="button"
-                  class="btn-gold-outline"
-                  id="openValorJustoModal"
-                  aria-haspopup="dialog"
-                  aria-controls="valorJustoModal"
-                >
-                  Tasador Exprés
-                </button>
               </div>
             </div>
-
-            <aside class="hero-calc-card reveal reveal-delay-2" aria-labelledby="heroCalcTitle">
-              <p class="hero-calc-eyebrow">Calculadora rápida</p>
-              <h3 id="heroCalcTitle">Capital, intereses y honorarios</h3>
-              <p class="hero-calc-helper">Úsela en modo general o laboral trabajador.</p>
-
-              <div class="hero-calc-tabs" role="tablist" aria-label="Modo de cálculo">
-                <button id="calcTabGeneral" class="hero-calc-tab is-active" type="button" role="tab" aria-selected="true" onclick="switchCalculatorMode('general')">General</button>
-                <button id="calcTabWorker" class="hero-calc-tab" type="button" role="tab" aria-selected="false" onclick="switchCalculatorMode('worker')">Trabajador</button>
-              </div>
-
-              <form id="heroCalculatorForm" class="hero-calc-form" onsubmit="handleCalculatorSubmit(event)">
-                <div class="hero-calc-field">
-                  <label for="calcCapital" id="calcCapitalLabel">Capital base ($)</label>
-                  <input id="calcCapital" name="capital" type="number" min="0" step="0.01" placeholder="Ej: 1200000" required />
-                </div>
-
-                <div class="hero-calc-field is-hidden" id="calcWorkerExtrasWrap">
-                  <label for="calcWorkerExtras">Adicionales trabajador ($)</label>
-                  <input id="calcWorkerExtras" name="worker_extras" type="number" min="0" step="0.01" placeholder="SAC, vacaciones, multas..." />
-                </div>
-
-                <div class="hero-calc-grid-2">
-                  <div class="hero-calc-field hero-calc-date-field">
-                    <label for="calcStartDate">Desde</label>
-                    <input id="calcStartDate" name="start_date" type="date" required />
-                  </div>
-                  <div class="hero-calc-field hero-calc-date-field">
-                    <label for="calcEndDate">Hasta</label>
-                    <input id="calcEndDate" name="end_date" type="date" required />
-                  </div>
-                </div>
-
-                <div class="hero-calc-grid-2">
-                  <div class="hero-calc-field">
-                    <label for="calcRateType">Tipo de interés (Chaco)</label>
-                    <select id="calcRateType" name="rate_type">
-                      <option value="custom">Personalizada (manual)</option>
-                    </select>
-                  </div>
-                  <div class="hero-calc-field">
-                    <label for="calcRate">Tasa anual (%)</label>
-                    <input id="calcRate" name="annual_rate" type="number" min="0" step="0.01" placeholder="Ej: 65" required />
-                  </div>
-                  <div class="hero-calc-field">
-                    <label for="calcHonorPct">Honorarios (%)</label>
-                    <input id="calcHonorPct" name="honorarios" type="number" min="0" max="100" step="0.01" placeholder="Ej: 20" />
-                  </div>
-                </div>
-
-                <button type="submit" class="btn-gold-solid hero-calc-submit">Calcular</button>
-              </form>
-
-              <p class="hero-calc-footnote" id="calcRatesNote">Tasas oficiales: cargando...</p>
-              <div id="heroCalcResult" class="hero-calc-result" aria-live="polite"></div>
-            </aside>
           </div>
         </div>
       </div>
@@ -628,49 +563,7 @@
     </svg>
   </a>
 
-  <div
-    class="vj-modal"
-    id="valorJustoModal"
-    hidden
-    aria-hidden="true"
-  >
-    <div class="vj-modal__backdrop" data-close-valorjusto></div>
-
-    <div
-      class="vj-modal__dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="valorJustoTitle"
-    >
-      <button
-        type="button"
-        class="vj-modal__close"
-        id="closeValorJustoModal"
-        aria-label="Cerrar Tasador Exprés"
-      >
-        &times;
-      </button>
-
-      <div class="vj-modal__header">
-        <p class="vj-modal__eyebrow">ValorJusto</p>
-        <h2 id="valorJustoTitle">Tasador Exprés</h2>
-      </div>
-
-      <div class="vj-modal__frame-wrap">
-        <iframe
-          id="valorJustoFrame"
-          src="https://iostojic.pythonanywhere.com"
-          title="Calculadora ValorJusto"
-          loading="lazy"
-          referrerpolicy="strict-origin-when-cross-origin"
-          allowfullscreen
-        ></iframe>
-      </div>
-    </div>
-  </div>
-
-  <script src="script.js?v=20260308-3"></script>
+  <script src="script.js?v=20260802-1"></script>
 </body>
 </html>
-
 

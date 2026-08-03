@@ -1619,7 +1619,7 @@ initDiagnosticTabs();
 initHeroCalculator();
 initVisitCounter();
 
-// ===== CONTACT FORM (OWN BACKEND SMTP) =====
+// ===== CONTACT FORM (ENVIO DIRECTO A WEB3FORMS) =====
 function showLocalServerRequiredStatus(btn, status) {
   if (btn) {
     btn.disabled = false;
