@@ -424,8 +424,87 @@ ul, ol { list-style: none; }
 
 @media (min-width: 1100px) {
   .hero-grid {
+    grid-template-columns: minmax(0, 1fr) 320px;
     gap: 2.5rem;
-    align-items: start;
+    align-items: center;
+  }
+}
+
+/* Insignia de apoyo a la Seleccion Argentina */
+.hero-flag-card {
+  background: rgba(9, 23, 45, 0.78);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 20px 44px -26px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+.hero-flag-stripe {
+  display: flex;
+  height: 8px;
+}
+
+.hero-flag-stripe span {
+  flex: 1;
+  background: #74acdf;
+}
+
+.hero-flag-stripe span:nth-child(2) {
+  background: #ffffff;
+}
+
+.hero-flag-body {
+  padding: 1.35rem 1.1rem;
+  text-align: center;
+}
+
+.hero-flag-eyebrow {
+  color: #d4af37;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.hero-flag-stars {
+  color: #f6b40e;
+  font-size: 1.05rem;
+  letter-spacing: 0.4em;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+
+.hero-flag-title {
+  font-family: 'Cormorant Garamond', serif;
+  color: #ffffff;
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 0.3rem;
+}
+
+.hero-flag-sub {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* En celular se achica para no empujar los botones de contacto */
+@media (max-width: 1099px) {
+  .hero-flag-card {
+    max-width: 260px;
+  }
+
+  .hero-flag-body {
+    padding: 1rem 0.9rem;
+  }
+
+  .hero-flag-title {
+    font-size: 1.25rem;
   }
 }
 
