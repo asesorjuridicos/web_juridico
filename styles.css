@@ -431,14 +431,9 @@ ul, ol { list-style: none; }
   }
 }
 
-/* Insignia de apoyo a la Seleccion Argentina */
+/* Insignia de apoyo a la Seleccion Argentina: sin recuadro, apoyada
+   directamente sobre la foto, justo debajo de la franja. */
 .hero-flag-card {
-  background: rgba(9, 23, 45, 0.78);
-  border: 1px solid rgba(212, 175, 55, 0.4);
-  border-radius: 1rem;
-  overflow: hidden;
-  box-shadow: 0 20px 44px -26px rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(4px);
   max-width: 320px;
   margin: 0 auto;
 }
@@ -449,7 +444,7 @@ ul, ol { list-style: none; }
   top: 0;
   left: 0;
   right: 0;
-  height: 7px;
+  height: 12px;
   display: flex;
   z-index: 30;
 }
@@ -464,40 +459,41 @@ ul, ol { list-style: none; }
 }
 
 .hero-flag-body {
-  padding: 1.35rem 1.1rem;
   text-align: center;
 }
 
-.hero-flag-eyebrow {
-  color: #d4af37;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.7rem;
-  font-weight: 700;
-  margin-bottom: 0.6rem;
-}
-
+/* Sin recuadro detras, el texto necesita sombra para leerse sobre la foto */
 .hero-flag-stars {
   color: #f6b40e;
-  font-size: 1.05rem;
-  letter-spacing: 0.4em;
+  font-size: 1.9rem;
+  letter-spacing: 0.3em;
   line-height: 1;
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.5rem;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.75);
 }
 
 .hero-flag-title {
   font-family: 'Cormorant Garamond', serif;
   color: #ffffff;
-  font-size: 1.5rem;
+  font-size: 1.75rem;
   font-weight: 700;
   line-height: 1.2;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 
 .hero-flag-sub {
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.85rem;
   line-height: 1.5;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+@media (min-width: 1100px) {
+  /* Sube la insignia para que quede pegada debajo de la franja */
+  .hero-flag-card {
+    margin-top: -3rem;
+  }
 }
 
 /* En celular se achica para no empujar los botones de contacto */
@@ -506,12 +502,12 @@ ul, ol { list-style: none; }
     max-width: 260px;
   }
 
-  .hero-flag-body {
-    padding: 1rem 0.9rem;
+  .hero-flag-stars {
+    font-size: 1.5rem;
   }
 
   .hero-flag-title {
-    font-size: 1.25rem;
+    font-size: 1.4rem;
   }
 }
 
