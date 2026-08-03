@@ -1620,19 +1620,6 @@ initHeroCalculator();
 initVisitCounter();
 
 // ===== CONTACT FORM (ENVIO DIRECTO A WEB3FORMS) =====
-function showLocalServerRequiredStatus(btn, status) {
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = 'Servidor local requerido';
-  }
-
-  if (status) {
-    status.textContent = 'Abra el sitio en http://127.0.0.1:5500/index.html. Si no abre, ejecute "npm start" y recargue.';
-    status.classList.remove('success');
-    status.classList.add('error');
-  }
-}
-
 // Servicio de entrega del formulario de contacto. La access key es publica:
 // Web3Forms la publica en el HTML del cliente en su propia documentacion.
 var CONTACT_ENDPOINT = 'https://api.web3forms.com/submit';
@@ -1682,7 +1669,6 @@ function handleContactSubmit(e) {
   var form = e.target;
   var btn = document.getElementById('submitBtn');
   var status = document.getElementById('contactStatus');
-  var isFileProtocol = window.location.protocol === 'file:';
 
   if (status) {
     status.textContent = '';
@@ -1698,11 +1684,6 @@ function handleContactSubmit(e) {
   var senderEmail = formData.get('email');
   if (senderEmail) {
     formData.set('_replyto', String(senderEmail).trim());
-  }
-
-  if (isFileProtocol) {
-    showLocalServerRequiredStatus(btn, status);
-    return;
   }
 
   var nombre = String(formData.get('nombre') || '').trim();
