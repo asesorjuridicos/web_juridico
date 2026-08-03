@@ -424,18 +424,21 @@ ul, ol { list-style: none; }
 
 @media (min-width: 1100px) {
   .hero-grid {
-    grid-template-columns: minmax(0, 1fr) 320px;
     gap: 2.5rem;
-    /* La insignia sube al tope de la columna, justo debajo de la franja */
     align-items: start;
   }
 }
 
-/* Insignia de apoyo a la Seleccion Argentina: sin recuadro, apoyada
-   directamente sobre la foto, justo debajo de la franja. */
+/* Insignia de apoyo a la Seleccion Argentina: sin recuadro y anclada al
+   borde superior derecho del hero, para que arranque debajo de la franja
+   sin depender del alto del texto de la izquierda. */
 .hero-flag-card {
+  position: absolute;
+  top: 26px;
+  right: 3rem;
+  z-index: 25;
   max-width: 320px;
-  margin: 0 auto;
+  text-align: center;
 }
 
 /* Franja de la bandera a todo el ancho, pegada al borde superior del hero */
@@ -456,10 +459,6 @@ ul, ol { list-style: none; }
 
 .hero-flag-band span:nth-child(2) {
   background: #ffffff;
-}
-
-.hero-flag-body {
-  text-align: center;
 }
 
 /* Sin recuadro detras, el texto necesita sombra para leerse sobre la foto */
@@ -489,17 +488,12 @@ ul, ol { list-style: none; }
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
 }
 
-@media (min-width: 1100px) {
-  /* Sube la insignia para que quede pegada debajo de la franja */
-  .hero-flag-card {
-    margin-top: -3rem;
-  }
-}
-
 /* En celular se achica para no empujar los botones de contacto */
 @media (max-width: 1099px) {
   .hero-flag-card {
-    max-width: 260px;
+    top: 20px;
+    right: 1.25rem;
+    max-width: 200px;
   }
 
   .hero-flag-stars {
