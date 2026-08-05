@@ -1163,11 +1163,12 @@ ul, ol { list-style: none; }
   animation: robotFloat 4s ease-in-out infinite;
 }
 
-/* Pixel art: sin suavizado, para que no se vea borroso al escalar */
+/* Pixel art: sin suavizado, para que no se vea borroso al escalar.
+   Sin filtros CSS: al ser un GIF animado, el navegador recalcularia la
+   sombra en cada cuadro y la animacion se entrecorta. */
 .diagnostic-buho {
   display: block;
   image-rendering: pixelated;
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
 }
 
 .diagnostic-robot-shadow {
