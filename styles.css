@@ -1158,17 +1158,36 @@ ul, ol { list-style: none; }
   border-bottom: 2px solid rgba(212,175,55,0.2);
 }
 
+/* El buho trae su propia animacion en el GIF: no se le suma ninguna
+   animacion ni filtro CSS, que al recalcularse en cada cuadro hacian que
+   se viera entrecortado. */
 .diagnostic-robot {
   position: relative;
-  animation: robotFloat 4s ease-in-out infinite;
+  width: 192px;
+  height: 208px;
 }
 
-/* Pixel art: sin suavizado, para que no se vea borroso al escalar.
-   Sin filtros CSS: al ser un GIF animado, el navegador recalcularia la
-   sombra en cada cuadro y la animacion se entrecorta. */
+/* Pixel art: sin suavizado, para que no se vea borroso al escalar */
 .diagnostic-buho {
   display: block;
   image-rendering: pixelated;
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: opacity 0.25s ease;
+}
+
+/* Al pasar el mouse, el buho se pone a leer el libro */
+.diagnostic-buho.buho-lectura {
+  opacity: 0;
+}
+
+.diagnostic-robot:hover .buho-lectura {
+  opacity: 1;
+}
+
+.diagnostic-robot:hover .buho-reposo {
+  opacity: 0;
 }
 
 .diagnostic-robot-shadow {
@@ -2183,6 +2202,11 @@ ul, ol { list-style: none; }
   height: auto;
   image-rendering: pixelated;
   margin-top: 14px;
+}
+
+/* Igual que el buho grande: sin animacion CSS encima del GIF */
+.side-robot-avatar {
+  animation: none;
 }
 
 .side-robot-bubble {
