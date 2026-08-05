@@ -1163,6 +1163,13 @@ ul, ol { list-style: none; }
   animation: robotFloat 4s ease-in-out infinite;
 }
 
+/* Pixel art: sin suavizado, para que no se vea borroso al escalar */
+.diagnostic-buho {
+  display: block;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+}
+
 .diagnostic-robot-shadow {
   position: absolute;
   bottom: -8px;
@@ -2166,6 +2173,15 @@ ul, ol { list-style: none; }
 .side-robot-avatar svg {
   width: 62px;
   height: 62px;
+}
+
+/* El buho es mas alto que ancho: se amplia y se baja un poco para que
+   dentro del circulo se vea la cara y no el cuerpo entero. */
+.side-robot-buho {
+  width: 76px;
+  height: auto;
+  image-rendering: pixelated;
+  margin-top: 14px;
 }
 
 .side-robot-bubble {

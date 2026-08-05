@@ -699,33 +699,8 @@ function initSideRobot() {
     "Estamos en línea para asistirle."
   ];
   
-  // SVG del robot (cabeza + cuello + corbata) recortado para caber en círculo
-  var robotSvg = 
-    '<svg viewBox="55 10 90 130" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-      // Antena
-      '<line x1="100" y1="18" x2="100" y2="38" stroke="#d4af37" stroke-width="3" stroke-linecap="round" />' +
-      '<circle cx="100" cy="14" r="4" fill="#d4af37" opacity="0.9">' +
-        '<animate attributeName="opacity" values="0.9;0.4;0.9" dur="2s" repeatCount="indefinite" />' +
-      '</circle>' +
-      // Cabeza
-      '<rect x="60" y="38" width="80" height="60" rx="16" fill="#0f2340" stroke="#d4af37" stroke-width="2" />' +
-      // Ojos con parpadeo
-      '<g class="animate-blink">' +
-        '<circle cx="82" cy="65" r="7" fill="#d4af37" opacity="0.9" />' +
-        '<circle cx="82" cy="65" r="3.5" fill="#fff" />' +
-        '<circle cx="118" cy="65" r="7" fill="#d4af37" opacity="0.9" />' +
-        '<circle cx="118" cy="65" r="3.5" fill="#fff" />' +
-      '</g>' +
-      // Sonrisa
-      '<path d="M85 82 Q100 90 115 82" stroke="#d4af37" stroke-width="2" fill="none" stroke-linecap="round" />' +
-      // Cuello
-      '<rect x="92" y="98" width="16" height="8" rx="3" fill="#0f2340" stroke="#d4af37" stroke-width="1.5" />' +
-      // Pecho (parte superior del cuerpo)
-      '<rect x="62" y="106" width="76" height="30" rx="12" fill="#0f2340" stroke="#d4af37" stroke-width="2" />' +
-      // Corbata diamante
-      '<polygon points="100,108 94,122 100,134 106,122" fill="#d4af37" />' +
-      '<polygon points="96,108 100,104 104,108" fill="#d4af37" />' +
-    '</svg>';
+  // Buho asesor, recortado dentro del circulo del avatar
+  var robotSvg = '<img src="assets/buho/wave.gif" class="side-robot-buho" alt="Buho asesor" />';
 
   robotContainer.innerHTML = 
     '<div class="side-robot-avatar" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})">' +
