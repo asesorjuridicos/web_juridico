@@ -138,13 +138,13 @@ function initReveal() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
     initReveal();
-    initOwlDoctor();
-    initSideRobot();
+    initBuhoDoctor();
+    initBuhoAsistente();
   });
 } else {
   initReveal();
-  initOwlDoctor();
-  initSideRobot();
+  initBuhoDoctor();
+  initBuhoAsistente();
 }
 
 // ===== HERO CALCULATOR =====
@@ -761,8 +761,8 @@ function srcBuho(nombre) {
 
 detectarFormatoBuho();
 
-function initOwlDoctor() {
-  var root = document.getElementById('owlDoctor');
+function initBuhoDoctor() {
+  var root = document.getElementById('buhoDoctor');
   if (!root) return;
 
   var layers = {
@@ -968,12 +968,12 @@ function initOwlDoctor() {
   });
 }
 
-// ===== SIDE ROBOT (ASISTENTE FLOTANTE AL HACER SCROLL) =====
-function initSideRobot() {
-  // 1. Crear el HTML del robot dinámicamente
-  var robotContainer = document.createElement('div');
-  robotContainer.className = 'side-robot-container';
-  robotContainer.id = 'sideRobot';
+// ===== BUHO ASISTENTE (FLOTANTE, APARECE AL HACER SCROLL) =====
+function initBuhoAsistente() {
+  // 1. Crear el HTML del asistente dinámicamente
+  var contenedor = document.createElement('div');
+  contenedor.className = 'buho-asistente';
+  contenedor.id = 'buhoAsistente';
   
   // Mensajes rotativos con tono profesional
   var messages = [
@@ -996,17 +996,17 @@ function initSideRobot() {
   // de layout cuando entra el GIF.
   // Nace aparcado en el 1x1 transparente: el sprite entra cuando se sabe el
   // formato y cuando el asistente realmente se muestra.
-  var robotSvg = '<img src="' + OWL_BLANK + '" id="sideRobotBuho" class="side-robot-buho" ' +
+  var spriteHtml = '<img src="' + OWL_BLANK + '" id="buhoAsistenteSprite" class="buho-asistente-sprite" ' +
     'width="192" height="208" decoding="async" alt="Buho asesor" />';
 
-  robotContainer.innerHTML =
-    '<div class="side-robot-avatar" id="sideRobotAvatar" role="button" tabindex="0" aria-label="Ir al diagnóstico con IA">' +
-      robotSvg +
-      '<div class="side-robot-close" id="sideRobotClose" role="button" tabindex="0" aria-label="Cerrar asistente">✕</div>' +
+  contenedor.innerHTML =
+    '<div class="buho-asistente-avatar" id="buhoAsistenteAvatar" role="button" tabindex="0" aria-label="Ir al diagnóstico con IA">' +
+      spriteHtml +
+      '<div class="buho-asistente-cerrar" id="buhoAsistenteCerrar" role="button" tabindex="0" aria-label="Cerrar asistente">✕</div>' +
     '</div>' +
-    '<div class="side-robot-bubble" id="sideRobotText" role="button" tabindex="0">Estimado, ¿en qué podemos asesorarle?</div>';
+    '<div class="buho-asistente-burbuja" id="buhoAsistenteMensaje" role="button" tabindex="0">Estimado, ¿en qué podemos asesorarle?</div>';
 
-  document.body.appendChild(robotContainer);
+  document.body.appendChild(contenedor);
 
   // Precarga del saludo para que no espere a la red en el primer toque.
   var waveWarmup = null;
@@ -1020,7 +1020,7 @@ function initSideRobot() {
   var sideGreeting = false;
   var sidePendiente = null;   // accion de un toque llegado durante otro saludo
 
-  function sideRobotGreet(done) {
+  function saludarAsistente(done) {
     if (reduceMotion) { if (typeof done === 'function') done(); return; }
     if (sideGreeting) {
       // Ya hay un saludo en curso, casi siempre el de bienvenida. Antes el
@@ -1031,10 +1031,10 @@ function initSideRobot() {
     }
     sideGreeting = true;
 
-    var img = document.getElementById('sideRobotBuho');
+    var img = document.getElementById('buhoAsistenteSprite');
     var targets = [
-      document.getElementById('sideRobotAvatar'),
-      document.getElementById('sideRobotText')
+      document.getElementById('buhoAsistenteAvatar'),
+      document.getElementById('buhoAsistenteMensaje')
     ];
 
     // Cambiar el src reinicia el GIF desde el primer cuadro: el ala se levanta
@@ -1067,42 +1067,42 @@ function initSideRobot() {
 
   // --- Interaccion: click y touchstart, con la misma proteccion contra el
   //     click sintetico que dispara el navegador tras un toque.
-  var lastSideTouchAt = 0;
+  var ultimoToqueAsistente = 0;
 
-  function activateSideRobot() {
+  function activarAsistente() {
     // Si el usuario interactuó, se cancela el auto-ocultado para que el saludo
     // no quede cortado a mitad de camino.
     clearTimeout(scrollHideTimer);
-    sideRobotGreet(goToDiagnostic);
+    saludarAsistente(goToDiagnostic);
   }
 
-  ['sideRobotAvatar', 'sideRobotText'].forEach(function (id) {
+  ['buhoAsistenteAvatar', 'buhoAsistenteMensaje'].forEach(function (id) {
     var el = document.getElementById(id);
     if (!el) return;
 
     el.addEventListener('touchstart', function () {
-      lastSideTouchAt = Date.now();
-      activateSideRobot();
+      ultimoToqueAsistente = Date.now();
+      activarAsistente();
     }, { passive: true });
 
     el.addEventListener('click', function () {
-      if (Date.now() - lastSideTouchAt < 900) return;
-      activateSideRobot();
+      if (Date.now() - ultimoToqueAsistente < 900) return;
+      activarAsistente();
     });
 
     el.addEventListener('keydown', function (event) {
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault();
-        activateSideRobot();
+        activarAsistente();
       }
     });
   });
 
-  var closeBtn = document.getElementById('sideRobotClose');
+  var closeBtn = document.getElementById('buhoAsistenteCerrar');
   if (closeBtn) {
     closeBtn.addEventListener('click', function (event) {
       event.stopPropagation();
-      window.hideSideRobot();
+      cerrarAsistente();
     });
     closeBtn.addEventListener('touchstart', function (event) {
       event.stopPropagation();
@@ -1111,45 +1111,45 @@ function initSideRobot() {
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
         event.preventDefault();
         event.stopPropagation();
-        window.hideSideRobot();
+        cerrarAsistente();
       }
     });
   }
 
   // 2. Lógica de aparición basada en scroll
-  var sideRobotVisible = false;
-  var sideRobotCooldown = false;
+  var asistenteVisible = false;
+  var asistenteEnEspera = false;
   var scrollHideTimer = null;
-  var robotCooldownTimer = null;
+  var esperaTimer = null;
   var greetOnEnterTimer = null;
   var sideParkTimer = null;
-  var diagnosticInView = false;   // el buho grande esta en pantalla y el asistente estorbaria
+  var buhoDoctorEstorba = false;   // el buho grande esta en pantalla y el asistente estorbaria
   var lastMsgIndex = -1;
 
   // Al ocultarse se cancela cualquier saludo pendiente y, una vez terminada la
   // salida, se aparca el GIF. El asistente vive siempre en el DOM: sin esto se
   // quedaba animando fuera de pantalla todo el tiempo, gastando bateria para
   // nadie. Ocultarlo por CSS no basta, hay que soltar el GIF.
-  function resetSideRobotAnimation() {
+  function detenerAnimacionAsistente() {
     clearTimeout(greetOnEnterTimer);
     clearTimeout(sideGreetTimer);
     clearTimeout(sideParkTimer);
     sideGreeting = false;
     sidePendiente = null;
-    ['sideRobotAvatar', 'sideRobotText'].forEach(function (id) {
+    ['buhoAsistenteAvatar', 'buhoAsistenteMensaje'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.classList.remove('is-greeting');
     });
     sideParkTimer = setTimeout(function () {
-      var img = document.getElementById('sideRobotBuho');
-      if (img && !sideRobotVisible) img.src = OWL_BLANK;
+      var img = document.getElementById('buhoAsistenteSprite');
+      if (img && !asistenteVisible) img.src = OWL_BLANK;
     }, 750); // dura lo mismo que la transicion de salida
   }
 
   // Vuelve a poner el GIF de reposo antes de que el asistente entre en pantalla.
-  function wakeSideRobotAnimation() {
+  function reanudarAnimacionAsistente() {
     clearTimeout(sideParkTimer);
-    var img = document.getElementById('sideRobotBuho');
+    var img = document.getElementById('buhoAsistenteSprite');
     if (img && img.getAttribute('src') !== srcBuho('idle')) img.src = srcBuho('idle');
   }
 
@@ -1160,48 +1160,48 @@ function initSideRobot() {
     return messages[idx];
   }
 
-  function showSideRobot() {
-    if (sideRobotVisible || sideRobotCooldown || diagnosticInView) return;
-    var el = document.getElementById('sideRobot');
-    var textEl = document.getElementById('sideRobotText');
+  function mostrarAsistente() {
+    if (asistenteVisible || asistenteEnEspera || buhoDoctorEstorba) return;
+    var el = document.getElementById('buhoAsistente');
+    var textEl = document.getElementById('buhoAsistenteMensaje');
     if (!el) return;
     
     if (textEl) textEl.textContent = getRandomMsg();
-    wakeSideRobotAnimation();
+    reanudarAnimacionAsistente();
     el.classList.add('visible');
-    sideRobotVisible = true;
+    asistenteVisible = true;
 
     // Saluda una vez al terminar de entrar. Reemplaza al bucle permanente de
     // wave.gif: mismo gesto, pero sin animar nada el resto del tiempo.
     clearTimeout(greetOnEnterTimer);
     greetOnEnterTimer = setTimeout(function () {
-      if (sideRobotVisible) sideRobotGreet();
+      if (asistenteVisible) saludarAsistente();
     }, 750);
 
     // Se esconde automáticamente después de 10 segundos
     clearTimeout(scrollHideTimer);
     scrollHideTimer = setTimeout(function() {
-      hideSideRobotAuto();
+      ocultarAsistenteAuto();
     }, 10000);
   }
 
-  function hideSideRobotAuto() {
-    var el = document.getElementById('sideRobot');
+  function ocultarAsistenteAuto() {
+    var el = document.getElementById('buhoAsistente');
     if (el) el.classList.remove('visible');
-    sideRobotVisible = false;
-    resetSideRobotAnimation();
-    sideRobotCooldown = true;
-    clearTimeout(robotCooldownTimer);
-    robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 10000);
+    asistenteVisible = false;
+    detenerAnimacionAsistente();
+    asistenteEnEspera = true;
+    clearTimeout(esperaTimer);
+    esperaTimer = setTimeout(function() { asistenteEnEspera = false; }, 10000);
   }
 
-  // Se oculta sin castigo: a diferencia de hideSideRobotAuto, no activa el
+  // Se oculta sin castigo: a diferencia de ocultarAsistenteAuto, no activa el
   // periodo de espera, asi que el asistente vuelve apenas se libera el espacio.
-  function hideSideRobotPorEstorbo() {
-    var el = document.getElementById('sideRobot');
+  function ocultarAsistentePorEstorbo() {
+    var el = document.getElementById('buhoAsistente');
     if (el) el.classList.remove('visible');
-    sideRobotVisible = false;
-    resetSideRobotAnimation();
+    asistenteVisible = false;
+    detenerAnimacionAsistente();
     clearTimeout(scrollHideTimer);
   }
 
@@ -1213,10 +1213,10 @@ function initSideRobot() {
     clearTimeout(scrollDebounce);
     scrollDebounce = setTimeout(function() {
       if (window.scrollY > scrollThreshold) {
-        showSideRobot();
+        mostrarAsistente();
       } else {
         // Si vuelve arriba, ocultarlo suavemente
-        hideSideRobotAuto();
+        ocultarAsistenteAuto();
       }
     }, 200);
   }, { passive: true });
@@ -1232,28 +1232,28 @@ function initSideRobot() {
   //      central de la pantalla, que es la unica altura donde el asistente
   //      realmente esta. Asi el asistente solo cede el paso cuando de verdad se
   //      superponen, y no cada vez que el buho asoma por un borde.
-  var buhoGrande = document.getElementById('owlDoctor');
+  var buhoGrande = document.getElementById('buhoDoctor');
   if (buhoGrande && 'IntersectionObserver' in window) {
     var buhoObserver = new IntersectionObserver(function (entries) {
-      diagnosticInView = entries[0].isIntersecting;
-      if (diagnosticInView) {
-        if (sideRobotVisible) hideSideRobotPorEstorbo();
+      buhoDoctorEstorba = entries[0].isIntersecting;
+      if (buhoDoctorEstorba) {
+        if (asistenteVisible) ocultarAsistentePorEstorbo();
       } else if (window.scrollY > scrollThreshold) {
-        showSideRobot();   // ya no estorba: puede volver
+        mostrarAsistente();   // ya no estorba: puede volver
       }
     }, { threshold: 0, rootMargin: '-42% 0px -42% 0px' });
     buhoObserver.observe(buhoGrande);
   }
 
   // Función global para ocultarlo manualmente (con la X) — tiene acceso al closure
-  window.hideSideRobot = function() {
-    var el = document.getElementById('sideRobot');
+  cerrarAsistente = function() {
+    var el = document.getElementById('buhoAsistente');
     if (el) el.classList.remove('visible');
-    sideRobotVisible = false;
-    resetSideRobotAnimation();
-    sideRobotCooldown = true;
-    clearTimeout(robotCooldownTimer);
-    robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 30000);
+    asistenteVisible = false;
+    detenerAnimacionAsistente();
+    asistenteEnEspera = true;
+    clearTimeout(esperaTimer);
+    esperaTimer = setTimeout(function() { asistenteEnEspera = false; }, 30000);
   };
 }
 
@@ -1292,7 +1292,7 @@ var questions = [
 
 var EXPRESS_FLOW = {
   area: {
-    question: 'El robot pregunta: ¿Qué área legal requiere auditoría?',
+    question: 'El búho asesor pregunta: ¿Qué área legal requiere auditoría?',
     options: [
       { value: 'laboral', label: 'Laboral' },
       { value: 'sucesiones', label: 'Sucesiones' },
@@ -1405,8 +1405,8 @@ var expressState = {
 
 var TYPING_DELAY = 700;
 
-function pulseRobot() {
-  var el = document.querySelector('.diagnostic-robot');
+function pulsarBuho() {
+  var el = document.querySelector('.buho-doctor');
   if (!el) return;
   el.classList.remove('pulse');
   void el.offsetWidth;
@@ -1518,7 +1518,7 @@ function renderQuestion(stepNum) {
         optionsHTML +
       '</div>';
 
-    pulseRobot();
+    pulsarBuho();
   }, TYPING_DELAY);
 }
 
@@ -1747,7 +1747,7 @@ function renderExpressQuestion(questionId) {
         optionsHTML +
       '</div>';
 
-    pulseRobot();
+    pulsarBuho();
   }, TYPING_DELAY);
 }
 
