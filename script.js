@@ -975,6 +975,12 @@ function initBuhoAsistente() {
   contenedor.className = 'buho-asistente';
   contenedor.id = 'buhoAsistente';
   
+  // La primera vez que aparece se presenta; despues rota mensajes.
+  // (El texto que trae el div al crearse no se llega a ver nunca: mostrarAsistente
+  //  lo reemplaza antes de que la burbuja se haga visible.)
+  var SALUDO_INICIAL = 'Soy el Doctor Búho, ¿en qué puedo asesorarle?';
+  var primeraAparicion = true;
+
   // Mensajes rotativos con tono profesional
   var messages = [
     "¿Necesita auditar su caso legal hoy?",
@@ -997,14 +1003,14 @@ function initBuhoAsistente() {
   // Nace aparcado en el 1x1 transparente: el sprite entra cuando se sabe el
   // formato y cuando el asistente realmente se muestra.
   var spriteHtml = '<img src="' + OWL_BLANK + '" id="buhoAsistenteSprite" class="buho-asistente-sprite" ' +
-    'width="192" height="208" decoding="async" alt="Buho asesor" />';
+    'width="192" height="208" decoding="async" alt="Doctor Búho" />';
 
   contenedor.innerHTML =
-    '<div class="buho-asistente-avatar" id="buhoAsistenteAvatar" role="button" tabindex="0" aria-label="Ir al diagnóstico con IA">' +
+    '<div class="buho-asistente-avatar" id="buhoAsistenteAvatar" role="button" tabindex="0" aria-label="Doctor Búho: ir al diagnóstico con IA">' +
       spriteHtml +
-      '<div class="buho-asistente-cerrar" id="buhoAsistenteCerrar" role="button" tabindex="0" aria-label="Cerrar asistente">✕</div>' +
+      '<div class="buho-asistente-cerrar" id="buhoAsistenteCerrar" role="button" tabindex="0" aria-label="Cerrar al Doctor Búho">✕</div>' +
     '</div>' +
-    '<div class="buho-asistente-burbuja" id="buhoAsistenteMensaje" role="button" tabindex="0">Estimado, ¿en qué podemos asesorarle?</div>';
+    '<div class="buho-asistente-burbuja" id="buhoAsistenteMensaje" role="button" tabindex="0">Soy el Doctor Búho, ¿en qué puedo asesorarle?</div>';
 
   document.body.appendChild(contenedor);
 
@@ -1166,7 +1172,8 @@ function initBuhoAsistente() {
     var textEl = document.getElementById('buhoAsistenteMensaje');
     if (!el) return;
     
-    if (textEl) textEl.textContent = getRandomMsg();
+    if (textEl) textEl.textContent = primeraAparicion ? SALUDO_INICIAL : getRandomMsg();
+    primeraAparicion = false;
     reanudarAnimacionAsistente();
     el.classList.add('visible');
     asistenteVisible = true;
@@ -1292,7 +1299,7 @@ var questions = [
 
 var EXPRESS_FLOW = {
   area: {
-    question: 'El búho asesor pregunta: ¿Qué área legal requiere auditoría?',
+    question: 'El Doctor Búho pregunta: ¿Qué área legal requiere auditoría?',
     options: [
       { value: 'laboral', label: 'Laboral' },
       { value: 'sucesiones', label: 'Sucesiones' },
