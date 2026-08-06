@@ -138,10 +138,12 @@ function initReveal() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
     initReveal();
+    initOwlDoctor();
     initSideRobot();
   });
 } else {
   initReveal();
+  initOwlDoctor();
   initSideRobot();
 }
 
@@ -684,6 +686,233 @@ async function handleCalculatorSubmit(e) {
   }
 }
 
+// ===== BUHO ASESOR (SECCION DIAGNOSTICO) =====
+// Maquina de estados de tres capas: 'reposo' (idle.gif), 'lectura' (review.gif,
+// el buho hojea el libro) y 'saludo' (wave.gif, levanta el ala).
+//
+// Por que no basta con :hover:
+//   En telefonos no existe el cursor, asi que la animacion de lectura no se
+//   veia nunca y el GIF igual consumia CPU. Ahora la lectura entra sola tras
+//   unos segundos sin interaccion, y el saludo se dispara al tocar.
+//
+// Cuidados de rendimiento:
+//   - Solo UNA animacion viva a la vez. Las capas inactivas quedan aparcadas en
+//     un GIF transparente de 1x1: ocultarlas con opacity/visibility no basta,
+//     porque un <img> oculto puede seguir animandose segun el navegador.
+//   - El temporizador de inactividad se apaga si el buho sale de pantalla o si
+//     la pestana pasa a segundo plano.
+//   - Los listeners de actividad son passive y estan limitados por tiempo para
+//     no reprogramar el timer en cada pixel de scroll.
+var OWL_IDLE_DELAY = 6000;   // ms sin interaccion antes de ponerse a leer
+var OWL_GREET_MS = 780;      // debe coincidir con la duracion de la animacion CSS
+var OWL_ACTIVITY_THROTTLE = 250;
+var OWL_FADE_MS = 220;       // idem: duracion del fundido en styles.css
+// GIF transparente de 1x1. Un <img> apuntando aca no tiene nada que animar.
+var OWL_BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+function initOwlDoctor() {
+  var root = document.getElementById('owlDoctor');
+  if (!root) return;
+
+  var layers = {
+    reposo: root.querySelector('.buho-reposo'),
+    lectura: root.querySelector('.buho-lectura'),
+    saludo: root.querySelector('.buho-saludo')
+  };
+  if (!layers.reposo || !layers.lectura || !layers.saludo) return;
+
+  var reduceMotion = prefersReducedMotion();
+  var canHover = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+
+  var state = 'reposo';
+  var idleTimer = null;
+  var greetTimer = null;
+  var parkTimer = null;
+  var lastActivityAt = 0;
+  var isGreeting = false;
+  var isHovered = false;
+  var inView = true;
+
+  // Mantiene los tres GIF en la cache de memoria del navegador para que
+  // reactivar una capa sea instantaneo y no dispare una peticion de red.
+  var warmup = [];
+  Object.keys(layers).forEach(function (key) {
+    var url = layers[key].getAttribute('data-src');
+    if (!url) return;
+    var pre = new Image();
+    pre.src = url;
+    warmup.push(pre);
+  });
+
+  function liveSrc(img) {
+    var url = img.getAttribute('data-src');
+    if (url && img.getAttribute('src') !== url) img.src = url;
+  }
+
+  // Aparca en el GIF vacio todas las capas que no sean la activa. Se llama al
+  // terminar el fundido para no cortar la transicion a mitad de camino.
+  function parkInactive() {
+    Object.keys(layers).forEach(function (key) {
+      if (key === state) return;
+      var img = layers[key];
+      if (img.getAttribute('src') !== OWL_BLANK) img.src = OWL_BLANK;
+    });
+  }
+
+  function setState(next) {
+    if (state === next || !layers[next]) return;
+    liveSrc(layers[next]);               // reanuda el GIF entrante (desde cache)
+    if (layers[state]) layers[state].classList.remove('is-active');
+    layers[next].classList.add('is-active');
+    state = next;
+    root.setAttribute('data-owl-state', next);
+
+    clearTimeout(parkTimer);
+    parkTimer = setTimeout(parkInactive, OWL_FADE_MS + 60);
+  }
+
+  function stopIdleTimer() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  }
+
+  function scheduleIdle() {
+    stopIdleTimer();
+    // Nada de temporizadores si el buho no se ve o esta saludando.
+    if (!inView || isGreeting || isHovered || document.hidden) return;
+    idleTimer = setTimeout(function () {
+      setState('lectura');
+    }, OWL_IDLE_DELAY);
+  }
+
+  function onActivity() {
+    var now = Date.now();
+    if (now - lastActivityAt < OWL_ACTIVITY_THROTTLE) return;
+    lastActivityAt = now;
+    if (isGreeting || isHovered) return;
+    if (state === 'lectura') setState('reposo');
+    scheduleIdle();
+  }
+
+  // Lleva al usuario al modulo de IA y, si el panel activo todavia esta en el
+  // paso inicial, arranca el diagnostico. Si ya hay uno en curso solo hace
+  // scroll, para no pisar la respuesta a medio responder.
+  function openDiagnostic() {
+    var area = document.getElementById('diagnosticArea');
+    if (area && typeof area.scrollIntoView === 'function') {
+      area.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+    }
+
+    var panel = document.querySelector('.ia-panel:not(.is-hidden)');
+    if (!panel) return;
+    var activeStep = panel.querySelector('.diagnostic-step.active');
+    if (!activeStep) return;
+    if (activeStep.id !== 'expressStep0' && activeStep.id !== 'step0') return;
+    var startBtn = activeStep.querySelector('button');
+    if (startBtn) startBtn.click();
+  }
+
+  function greet(done) {
+    if (isGreeting) return;
+    isGreeting = true;
+    stopIdleTimer();
+    setState('saludo');
+
+    // Reinicio forzado de la animacion por si se toca dos veces seguidas.
+    root.classList.remove('is-greeting');
+    void root.offsetWidth;
+    root.classList.add('is-greeting');
+
+    clearTimeout(greetTimer);
+    greetTimer = setTimeout(function () {
+      root.classList.remove('is-greeting');
+      isGreeting = false;
+      setState(isHovered ? 'lectura' : 'reposo');
+      scheduleIdle();
+      if (typeof done === 'function') done();
+    }, OWL_GREET_MS);
+  }
+
+  function activate() {
+    if (isGreeting) return;
+    // Con movimiento reducido se salta el saludo y se va directo a la accion.
+    if (reduceMotion) { openDiagnostic(); return; }
+    greet(openDiagnostic);
+  }
+
+  // --- Interaccion: click y touchstart ---------------------------------
+  // En tactil el `click` sintetico llega despues del `touchstart` ya atendido,
+  // asi que se descarta con una ventana de tiempo para no saludar dos veces.
+  var lastTouchAt = 0;
+
+  root.addEventListener('touchstart', function () {
+    lastTouchAt = Date.now();
+    activate();
+  }, { passive: true });
+
+  root.addEventListener('click', function () {
+    if (Date.now() - lastTouchAt < 900) return;
+    activate();
+  });
+
+  root.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      activate();
+    }
+  });
+
+  // --- Hover solo en equipos con puntero fino --------------------------
+  if (canHover) {
+    root.addEventListener('pointerenter', function () {
+      isHovered = true;
+      if (isGreeting) return;
+      stopIdleTimer();
+      setState('lectura');
+    });
+    root.addEventListener('pointerleave', function () {
+      isHovered = false;
+      if (isGreeting) return;
+      setState('reposo');
+      scheduleIdle();
+    });
+  }
+
+  // --- Solo animar lo que se ve ----------------------------------------
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      inView = entries[0].isIntersecting;
+      if (inView) {
+        scheduleIdle();
+      } else {
+        stopIdleTimer();
+        if (!isGreeting && state === 'lectura') setState('reposo');
+      }
+    }, { threshold: 0.1 });
+    observer.observe(root);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopIdleTimer();
+    else scheduleIdle();
+  });
+
+  var activityEvents = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'];
+  activityEvents.forEach(function (name) {
+    window.addEventListener(name, onActivity, { passive: true });
+  });
+
+  // Estado inicial: solo reposo animandose. Se espera a que las capas terminen
+  // de cargar para no aparcarlas antes de que lleguen a la cache.
+  if (document.readyState === 'complete') parkInactive();
+  else window.addEventListener('load', parkInactive, { once: true });
+
+  scheduleIdle();
+}
+
 // ===== SIDE ROBOT (ASISTENTE FLOTANTE AL HACER SCROLL) =====
 function initSideRobot() {
   // 1. Crear el HTML del robot dinámicamente
@@ -699,24 +928,166 @@ function initSideRobot() {
     "Estamos en línea para asistirle."
   ];
   
-  // Buho asesor, recortado dentro del circulo del avatar
-  var robotSvg = '<img src="assets/buho/wave.gif" class="side-robot-buho" alt="Buho asesor" />';
+  // Buho asesor, recortado dentro del circulo del avatar.
+  // En reposo usa idle.gif y solo pasa a wave.gif durante el saludo: antes
+  // wave.gif quedaba en bucle permanente, animandose incluso con el asistente
+  // fuera de pantalla.
+  var SIDE_IDLE_SRC = 'assets/buho/idle.gif';
+  var SIDE_WAVE_SRC = 'assets/buho/wave.gif';
+  var reduceMotion = prefersReducedMotion();
 
-  robotContainer.innerHTML = 
-    '<div class="side-robot-avatar" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})">' +
+  // width/height explicitos: el navegador reserva el espacio y no hay salto
+  // de layout cuando entra el GIF.
+  var robotSvg = '<img src="' + SIDE_IDLE_SRC + '" id="sideRobotBuho" class="side-robot-buho" ' +
+    'width="192" height="208" decoding="async" alt="Buho asesor" />';
+
+  robotContainer.innerHTML =
+    '<div class="side-robot-avatar" id="sideRobotAvatar" role="button" tabindex="0" aria-label="Ir al diagnóstico con IA">' +
       robotSvg +
-      '<div class="side-robot-close" onclick="event.stopPropagation(); hideSideRobot();">✕</div>' +
+      '<div class="side-robot-close" id="sideRobotClose" role="button" tabindex="0" aria-label="Cerrar asistente">✕</div>' +
     '</div>' +
-    '<div class="side-robot-bubble" id="sideRobotText" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})" style="cursor:pointer;">Estimado, ¿en qué podemos asesorarle?</div>';
+    '<div class="side-robot-bubble" id="sideRobotText" role="button" tabindex="0">Estimado, ¿en qué podemos asesorarle?</div>';
 
   document.body.appendChild(robotContainer);
+
+  // Precarga de wave.gif para que el saludo no espere a la red en el primer toque.
+  var waveWarmup = new Image();
+  waveWarmup.src = SIDE_WAVE_SRC;
+
+  // --- Microinteraccion de saludo --------------------------------------
+  var sideGreetTimer = null;
+  var sideGreeting = false;
+
+  function sideRobotGreet(done) {
+    if (reduceMotion) { if (typeof done === 'function') done(); return; }
+    if (sideGreeting) return;
+    sideGreeting = true;
+
+    var img = document.getElementById('sideRobotBuho');
+    var targets = [
+      document.getElementById('sideRobotAvatar'),
+      document.getElementById('sideRobotText')
+    ];
+
+    // Cambiar el src reinicia el GIF desde el primer cuadro: el ala se levanta
+    // justo cuando el usuario toca, no en un punto cualquiera del bucle.
+    if (img) img.src = SIDE_WAVE_SRC;
+    targets.forEach(function (el) {
+      if (!el) return;
+      el.classList.remove('is-greeting');
+      void el.offsetWidth;
+      el.classList.add('is-greeting');
+    });
+
+    clearTimeout(sideGreetTimer);
+    sideGreetTimer = setTimeout(function () {
+      targets.forEach(function (el) { if (el) el.classList.remove('is-greeting'); });
+      if (img) img.src = SIDE_IDLE_SRC;
+      sideGreeting = false;
+      if (typeof done === 'function') done();
+    }, OWL_GREET_MS);
+  }
+
+  function goToDiagnostic() {
+    var target = document.querySelector('.diagnostic');
+    if (target) target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
+  // --- Interaccion: click y touchstart, con la misma proteccion contra el
+  //     click sintetico que dispara el navegador tras un toque.
+  var lastSideTouchAt = 0;
+
+  function activateSideRobot() {
+    // Si el usuario interactuó, se cancela el auto-ocultado para que el saludo
+    // no quede cortado a mitad de camino.
+    clearTimeout(scrollHideTimer);
+    sideRobotGreet(goToDiagnostic);
+  }
+
+  ['sideRobotAvatar', 'sideRobotText'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+
+    el.addEventListener('touchstart', function () {
+      lastSideTouchAt = Date.now();
+      activateSideRobot();
+    }, { passive: true });
+
+    el.addEventListener('click', function () {
+      if (Date.now() - lastSideTouchAt < 900) return;
+      activateSideRobot();
+    });
+
+    el.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        activateSideRobot();
+      }
+    });
+  });
+
+  var closeBtn = document.getElementById('sideRobotClose');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      window.hideSideRobot();
+    });
+    closeBtn.addEventListener('touchstart', function (event) {
+      event.stopPropagation();
+    }, { passive: true });
+    closeBtn.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        event.stopPropagation();
+        window.hideSideRobot();
+      }
+    });
+  }
 
   // 2. Lógica de aparición basada en scroll
   var sideRobotVisible = false;
   var sideRobotCooldown = false;
   var scrollHideTimer = null;
   var robotCooldownTimer = null;
+  var greetOnEnterTimer = null;
+  var sideParkTimer = null;
+  var diagnosticInView = false;
   var lastMsgIndex = -1;
+
+  // Al ocultarse se cancela cualquier saludo pendiente y, una vez terminada la
+  // salida, se aparca el GIF. El asistente vive siempre en el DOM: sin esto se
+  // quedaba animando fuera de pantalla todo el tiempo, gastando bateria para
+  // nadie. Ocultarlo por CSS no basta, hay que soltar el GIF.
+  function resetSideRobotAnimation() {
+    clearTimeout(greetOnEnterTimer);
+    clearTimeout(sideGreetTimer);
+    clearTimeout(sideParkTimer);
+    sideGreeting = false;
+    ['sideRobotAvatar', 'sideRobotText'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('is-greeting');
+    });
+    sideParkTimer = setTimeout(function () {
+      var img = document.getElementById('sideRobotBuho');
+      if (img && !sideRobotVisible) img.src = OWL_BLANK;
+    }, 750); // dura lo mismo que la transicion de salida
+  }
+
+  // Vuelve a poner el GIF de reposo antes de que el asistente entre en pantalla.
+  function wakeSideRobotAnimation() {
+    clearTimeout(sideParkTimer);
+    var img = document.getElementById('sideRobotBuho');
+    if (img && img.getAttribute('src') !== SIDE_IDLE_SRC) img.src = SIDE_IDLE_SRC;
+  }
+
+  // El asistente nace oculto: apenas el GIF queda en cache se lo aparca, y se
+  // reactiva recien al primer scroll que lo muestre.
+  var sideImgEl = document.getElementById('sideRobotBuho');
+  if (sideImgEl) {
+    var parkInitial = function () { if (!sideRobotVisible) sideImgEl.src = OWL_BLANK; };
+    if (sideImgEl.complete) parkInitial();
+    else sideImgEl.addEventListener('load', parkInitial, { once: true });
+  }
 
   function getRandomMsg() {
     var idx;
@@ -726,14 +1097,22 @@ function initSideRobot() {
   }
 
   function showSideRobot() {
-    if (sideRobotVisible || sideRobotCooldown) return;
+    if (sideRobotVisible || sideRobotCooldown || diagnosticInView) return;
     var el = document.getElementById('sideRobot');
     var textEl = document.getElementById('sideRobotText');
     if (!el) return;
     
     if (textEl) textEl.textContent = getRandomMsg();
+    wakeSideRobotAnimation();
     el.classList.add('visible');
     sideRobotVisible = true;
+
+    // Saluda una vez al terminar de entrar. Reemplaza al bucle permanente de
+    // wave.gif: mismo gesto, pero sin animar nada el resto del tiempo.
+    clearTimeout(greetOnEnterTimer);
+    greetOnEnterTimer = setTimeout(function () {
+      if (sideRobotVisible) sideRobotGreet();
+    }, 750);
 
     // Se esconde automáticamente después de 10 segundos
     clearTimeout(scrollHideTimer);
@@ -746,9 +1125,24 @@ function initSideRobot() {
     var el = document.getElementById('sideRobot');
     if (el) el.classList.remove('visible');
     sideRobotVisible = false;
+    resetSideRobotAnimation();
     sideRobotCooldown = true;
     clearTimeout(robotCooldownTimer);
     robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 10000);
+  }
+
+  // En pantallas angostas el asistente flotante queda justo encima del buho
+  // grande (a 393px de ancho se superponen) y le robaba el toque, con lo que la
+  // microinteraccion de saludo del buho no llegaba a dispararse nunca.
+  // Mientras el modulo de diagnostico esta a la vista el asistente sobra: su
+  // unica funcion es llevar hasta ahi. Se retira y deja de animarse.
+  var diagnosticSection = document.getElementById('diagnostico');
+  if (diagnosticSection && 'IntersectionObserver' in window) {
+    var diagObserver = new IntersectionObserver(function (entries) {
+      diagnosticInView = entries[0].isIntersecting;
+      if (diagnosticInView && sideRobotVisible) hideSideRobotAuto();
+    }, { threshold: 0 });
+    diagObserver.observe(diagnosticSection);
   }
 
   // Mostrar al hacer scroll pasado cierto punto (300px)
@@ -772,6 +1166,7 @@ function initSideRobot() {
     var el = document.getElementById('sideRobot');
     if (el) el.classList.remove('visible');
     sideRobotVisible = false;
+    resetSideRobotAnimation();
     sideRobotCooldown = true;
     clearTimeout(robotCooldownTimer);
     robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 30000);

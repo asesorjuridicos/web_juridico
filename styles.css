@@ -1158,13 +1158,27 @@ ul, ol { list-style: none; }
   border-bottom: 2px solid rgba(212,175,55,0.2);
 }
 
-/* El buho trae su propia animacion en el GIF: no se le suma ninguna
-   animacion ni filtro CSS, que al recalcularse en cada cuadro hacian que
-   se viera entrecortado. */
+/* El buho trae su propia animacion dentro del GIF. Regla para todo lo que se
+   le agregue encima: solo opacity y transform, que el compositor resuelve sin
+   volver a rasterizar la imagen. Nada de filter, box-shadow ni propiedades de
+   layout (left/top/width) animadas: esas obligan a rehacer la imagen o el
+   layout en cada cuadro, que es de donde salia el tironeo en telefonos. */
 .diagnostic-robot {
   position: relative;
   width: 192px;
   height: 208px;
+  cursor: pointer;
+  /* touch-action + tap-highlight: el toque responde al instante y sin el
+     recuadro gris de Android/iOS */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.diagnostic-robot:focus-visible {
+  outline: 2px solid rgba(212,175,55,0.85);
+  outline-offset: 6px;
+  border-radius: 12px;
 }
 
 /* Pixel art: sin suavizado, para que no se vea borroso al escalar */
@@ -1174,32 +1188,57 @@ ul, ol { list-style: none; }
   position: absolute;
   top: 0;
   left: 0;
-  transition: opacity 0.25s ease;
-}
-
-/* Al pasar el mouse, el buho se pone a leer el libro */
-.diagnostic-buho.buho-lectura {
   opacity: 0;
+  visibility: hidden;
+  /* El retardo de `visibility` es intencional: espera a que termine el fundido
+     y recien ahi retira la capa del arbol de pintado, para que no siga
+     componiendose ni pueda recibir toques.
+     Ojo: esto NO garantiza que el navegador pause el GIF de la capa oculta
+     (depende del motor). Quien garantiza que solo haya una animacion viva es
+     el JS, aparcando el src de las capas inactivas (ver initOwlDoctor). */
+  transition: opacity 0.22s linear, visibility 0s linear 0.22s;
 }
 
-.diagnostic-robot:hover .buho-lectura {
+.diagnostic-buho.is-active {
   opacity: 1;
+  visibility: visible;
+  transition: opacity 0.22s linear, visibility 0s linear 0s;
 }
 
-.diagnostic-robot:hover .buho-reposo {
-  opacity: 0;
+/* Microinteraccion de saludo: solo transform, se compone en GPU sin layout ni
+   repaint. will-change se activa unicamente mientras dura la animacion para no
+   dejar una capa extra reservada de por vida. */
+@keyframes owlGreetHop {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  28%  { transform: translate3d(0, -9px, 0) rotate(-3.5deg); }
+  55%  { transform: translate3d(0, -3px, 0) rotate(2.5deg); }
+  78%  { transform: translate3d(0, -5px, 0) rotate(-1.5deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
 }
 
+.diagnostic-robot.is-greeting {
+  animation: owlGreetHop 780ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+
+/* Sombra estatica: gradiente radial en vez de `filter: blur()`. El gradiente
+   se rasteriza una sola vez y queda cacheado; el blur se recalculaba en cada
+   cuadro sobre una capa de 192x208. */
 .diagnostic-robot-shadow {
   position: absolute;
-  bottom: -8px;
+  bottom: -6px;
   left: 50%;
-  transform: translateX(-50%);
-  width: 80px;
-  height: 12px;
-  background: rgba(212,175,55,0.1);
+  width: 118px;
+  height: 18px;
+  margin-left: -59px; /* centrado sin transform: evita crear otra capa */
   border-radius: 50%;
-  filter: blur(4px);
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(212,175,55,0.30) 0%,
+    rgba(212,175,55,0.13) 48%,
+    rgba(212,175,55,0) 100%
+  );
+  pointer-events: none;
 }
 
 .ia-tabs {
@@ -2155,25 +2194,41 @@ ul, ol { list-style: none; }
 }
 
 /* ===== SIDE ROBOT (ASISTENTE FLOTANTE) ===== */
+/* Antes se animaba `left`, que es una propiedad de layout: cada cuadro
+   disparaba reflow + recalculo de estilos. Medido con el CPU frenado 6x, 16
+   entradas/salidas costaban ~165ms de layout y ~1340ms de hilo principal;
+   pasando a transform quedan en 0ms de layout y ~210ms de hilo principal.
+   Esta era la causa principal del tironeo en moviles.
+   El visibility:hidden (con retardo, para no cortar la salida) evita que el
+   asistente oculto se siga componiendo. Quien detiene el GIF mientras esta
+   fuera de pantalla es el JS, soltando el src (ver initSideRobot). */
 .side-robot-container {
   position: fixed;
   top: 50%;
-  left: -120px;
-  transform: translateY(-50%);
+  left: 16px;
   z-index: 990;
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
-  transition: left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: translate3d(-150%, -50%, 0);
+  visibility: hidden;
+  transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
+              visibility 0s linear 0.7s;
+  will-change: transform;
   pointer-events: none;
 }
 
 .side-robot-container.visible {
-  left: 16px;
-  pointer-events: all;
+  transform: translate3d(0, -50%, 0);
+  visibility: visible;
+  transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1),
+              visibility 0s linear 0s;
+  pointer-events: auto;
 }
 
+/* Sin animacion CSS permanente encima del GIF: la sombra es estatica y solo
+   se anima transform durante el saludo. */
 .side-robot-avatar {
   width: 72px;
   height: 72px;
@@ -2186,8 +2241,9 @@ ul, ol { list-style: none; }
   box-shadow: 0 8px 28px rgba(0,0,0,0.5), 0 0 16px rgba(212,175,55,0.15);
   position: relative;
   cursor: pointer;
-  animation: robotFloat 4s ease-in-out infinite;
   overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .side-robot-avatar svg {
@@ -2204,9 +2260,20 @@ ul, ol { list-style: none; }
   margin-top: 14px;
 }
 
-/* Igual que el buho grande: sin animacion CSS encima del GIF */
-.side-robot-avatar {
-  animation: none;
+/* Saludo del asistente flotante: mismo criterio que el buho grande, solo
+   transform y will-change acotado a la duracion de la animacion. */
+@keyframes owlWaveNudge {
+  0%   { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  25%  { transform: translate3d(0, -4px, 0) scale(1.07) rotate(-5deg); }
+  55%  { transform: translate3d(0, -1px, 0) scale(1.03) rotate(4deg); }
+  80%  { transform: translate3d(0, -2px, 0) scale(1.04) rotate(-2deg); }
+  100% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+}
+
+.side-robot-avatar.is-greeting,
+.side-robot-bubble.is-greeting {
+  animation: owlWaveNudge 780ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
 }
 
 .side-robot-bubble {
@@ -2220,15 +2287,20 @@ ul, ol { list-style: none; }
   max-width: 200px;
   text-align: center;
   opacity: 0;
-  transform: translateX(-10px) scale(0.9);
-  transition: all 0.4s ease;
+  /* `all` obligaba al navegador a vigilar cada propiedad (incluida box-shadow,
+     que es cara de interpolar). Solo se anima lo que se compone en GPU. */
+  transform: translate3d(-10px, 0, 0) scale(0.9);
+  transition: opacity 0.4s ease, transform 0.4s ease;
   border: 1px solid rgba(212,175,55,0.3);
   order: 1; /* Burbuja a la derecha del robot */
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .side-robot-container.visible .side-robot-bubble {
   opacity: 1;
-  transform: translateX(0) scale(1);
+  transform: translate3d(0, 0, 0) scale(1);
   transition-delay: 0.5s;
 }
 
@@ -2252,6 +2324,33 @@ ul, ol { list-style: none; }
 
 .side-robot-container:hover .side-robot-close {
   opacity: 1;
+}
+
+/* En pantallas tactiles no existe hover: sin esto la X para cerrar el
+   asistente era inalcanzable en telefonos. */
+@media (hover: none), (pointer: coarse) {
+  .side-robot-close { opacity: 1; }
+}
+
+/* ===== ACCESIBILIDAD: MOVIMIENTO REDUCIDO =====
+   Si el usuario pidio menos movimiento se anulan los saludos y los fundidos.
+   Los estados siguen cambiando (visibility/opacity instantaneos), asi que la
+   funcionalidad no se pierde. */
+@media (prefers-reduced-motion: reduce) {
+  .diagnostic-robot.is-greeting,
+  .side-robot-avatar.is-greeting,
+  .side-robot-bubble.is-greeting {
+    animation: none;
+  }
+
+  .diagnostic-buho {
+    transition: opacity 0s linear, visibility 0s linear;
+  }
+
+  .side-robot-container,
+  .side-robot-container.visible {
+    transition: transform 0.01s linear, visibility 0s linear;
+  }
 }
 
 /* ===== DIAGNOSTIC HIDDEN STATES ===== */
