@@ -1018,10 +1018,17 @@ function initSideRobot() {
   // --- Microinteraccion de saludo --------------------------------------
   var sideGreetTimer = null;
   var sideGreeting = false;
+  var sidePendiente = null;   // accion de un toque llegado durante otro saludo
 
   function sideRobotGreet(done) {
     if (reduceMotion) { if (typeof done === 'function') done(); return; }
-    if (sideGreeting) return;
+    if (sideGreeting) {
+      // Ya hay un saludo en curso, casi siempre el de bienvenida. Antes el
+      // toque se descartaba entero y el asistente no llevaba a ningun lado:
+      // un toque muerto. Ahora la accion queda pendiente y corre al terminar.
+      if (typeof done === 'function') sidePendiente = done;
+      return;
+    }
     sideGreeting = true;
 
     var img = document.getElementById('sideRobotBuho');
@@ -1045,7 +1052,11 @@ function initSideRobot() {
       targets.forEach(function (el) { if (el) el.classList.remove('is-greeting'); });
       if (img) img.src = srcBuho('idle');
       sideGreeting = false;
+      var pendiente = sidePendiente;
+      sidePendiente = null;
+      // Una sola accion: la propia si la hay, o la que quedo encolada.
       if (typeof done === 'function') done();
+      else if (typeof pendiente === 'function') pendiente();
     }, OWL_GREET_MS);
   }
 
@@ -1112,7 +1123,7 @@ function initSideRobot() {
   var robotCooldownTimer = null;
   var greetOnEnterTimer = null;
   var sideParkTimer = null;
-  var diagnosticInView = false;
+  var diagnosticInView = false;   // el buho grande esta en pantalla y el asistente estorbaria
   var lastMsgIndex = -1;
 
   // Al ocultarse se cancela cualquier saludo pendiente y, una vez terminada la
@@ -1124,6 +1135,7 @@ function initSideRobot() {
     clearTimeout(sideGreetTimer);
     clearTimeout(sideParkTimer);
     sideGreeting = false;
+    sidePendiente = null;
     ['sideRobotAvatar', 'sideRobotText'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.classList.remove('is-greeting');
@@ -1183,18 +1195,14 @@ function initSideRobot() {
     robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 10000);
   }
 
-  // En pantallas angostas el asistente flotante queda justo encima del buho
-  // grande (a 393px de ancho se superponen) y le robaba el toque, con lo que la
-  // microinteraccion de saludo del buho no llegaba a dispararse nunca.
-  // Mientras el modulo de diagnostico esta a la vista el asistente sobra: su
-  // unica funcion es llevar hasta ahi. Se retira y deja de animarse.
-  var diagnosticSection = document.getElementById('diagnostico');
-  if (diagnosticSection && 'IntersectionObserver' in window) {
-    var diagObserver = new IntersectionObserver(function (entries) {
-      diagnosticInView = entries[0].isIntersecting;
-      if (diagnosticInView && sideRobotVisible) hideSideRobotAuto();
-    }, { threshold: 0 });
-    diagObserver.observe(diagnosticSection);
+  // Se oculta sin castigo: a diferencia de hideSideRobotAuto, no activa el
+  // periodo de espera, asi que el asistente vuelve apenas se libera el espacio.
+  function hideSideRobotPorEstorbo() {
+    var el = document.getElementById('sideRobot');
+    if (el) el.classList.remove('visible');
+    sideRobotVisible = false;
+    resetSideRobotAnimation();
+    clearTimeout(scrollHideTimer);
   }
 
   // Mostrar al hacer scroll pasado cierto punto (300px)
@@ -1212,6 +1220,30 @@ function initSideRobot() {
       }
     }, 200);
   }, { passive: true });
+
+  // El asistente flotante vive a media altura sobre el margen izquierdo, y a
+  // 393px de ancho eso cae justo encima del buho grande: le robaba el toque y
+  // la microinteraccion de saludo no llegaba a dispararse nunca.
+  //
+  // Se aparta lo MINIMO indispensable. Dos decisiones para lograrlo:
+  //   1. Se vigila solo al buho grande, no la seccion de diagnostico entera.
+  //      Vigilar la seccion dejaba al asistente sin aparecer en todo ese tramo.
+  //   2. El rootMargin negativo recorta la zona de observacion a la franja
+  //      central de la pantalla, que es la unica altura donde el asistente
+  //      realmente esta. Asi el asistente solo cede el paso cuando de verdad se
+  //      superponen, y no cada vez que el buho asoma por un borde.
+  var buhoGrande = document.getElementById('owlDoctor');
+  if (buhoGrande && 'IntersectionObserver' in window) {
+    var buhoObserver = new IntersectionObserver(function (entries) {
+      diagnosticInView = entries[0].isIntersecting;
+      if (diagnosticInView) {
+        if (sideRobotVisible) hideSideRobotPorEstorbo();
+      } else if (window.scrollY > scrollThreshold) {
+        showSideRobot();   // ya no estorba: puede volver
+      }
+    }, { threshold: 0, rootMargin: '-42% 0px -42% 0px' });
+    buhoObserver.observe(buhoGrande);
+  }
 
   // Función global para ocultarlo manualmente (con la X) — tiene acceso al closure
   window.hideSideRobot = function() {
