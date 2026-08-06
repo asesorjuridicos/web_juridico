@@ -41,10 +41,29 @@
   <meta name="twitter:description" content="Sucesiones, litigios, subastas judiciales y tasaciones en toda la provincia del Chaco." />
   <meta name="twitter:image" content="https://asesoresjuridicos.com.ar/og-image.jpg" />
 
-  <!-- Google Fonts -->
+  <!-- Google Fonts.
+       Una hoja de estilos normal bloquea el pintado: hasta que Google no
+       responde, el visitante mira una pantalla en blanco. Si Google va lento,
+       esta filtrado o la conexion es mala, la espera es larga y mucha gente se
+       va antes de ver nada.
+
+       Con media="print" el navegador la baja sin bloquear, y el onload la pasa
+       a "all" apenas llega. El texto aparece enseguida con la tipografia de
+       respaldo y se reemplaza al cargar la definitiva (por eso el display=swap
+       de la URL). El <noscript> cubre a quien navega sin JavaScript. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap" />
+  <link rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap" />
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap" />
+  </noscript>
+
+  <!-- La imagen de fondo del hero es el elemento mas grande de la primera
+       pantalla (el que define el LCP). Viene de un style en linea, asi que el
+       navegador recien la descubre despues de armar el layout: precargarla la
+       pone en marcha de entrada. -->
+  <link rel="preload" as="image" href="hero-fondo.webp" fetchpriority="high" />
 
   <link rel="stylesheet" href="styles.css?v=20260806-14" />
 
@@ -665,7 +684,7 @@
     </svg>
   </a>
 
-  <script src="script.js?v=20260806-8"></script>
+  <script src="script.js?v=20260806-9"></script>
 </body>
 </html>
 

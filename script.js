@@ -1129,7 +1129,9 @@ function initBuhoAsistente() {
   var esperaTimer = null;
   var greetOnEnterTimer = null;
   var sideParkTimer = null;
-  var buhoDoctorEstorba = false;   // el buho grande esta en pantalla y el asistente estorbaria
+  // El asistente estorba: el buho grande esta en la franja central, o la
+  // persona llego al cierre de la pagina.
+  var buhoDoctorEstorba = false;
   var lastMsgIndex = -1;
 
   // Al ocultarse se cancela cualquier saludo pendiente y, una vez terminada la
@@ -1239,17 +1241,41 @@ function initBuhoAsistente() {
   //      central de la pantalla, que es la unica altura donde el asistente
   //      realmente esta. Asi el asistente solo cede el paso cuando de verdad se
   //      superponen, y no cada vez que el buho asoma por un borde.
-  var buhoGrande = document.getElementById('buhoDoctor');
-  if (buhoGrande && 'IntersectionObserver' in window) {
-    var buhoObserver = new IntersectionObserver(function (entries) {
-      buhoDoctorEstorba = entries[0].isIntersecting;
-      if (buhoDoctorEstorba) {
-        if (asistenteVisible) ocultarAsistentePorEstorbo();
-      } else if (window.scrollY > scrollThreshold) {
-        mostrarAsistente();   // ya no estorba: puede volver
-      }
-    }, { threshold: 0, rootMargin: '-42% 0px -42% 0px' });
-    buhoObserver.observe(buhoGrande);
+  //
+  // Y hay una segunda zona donde sobra por un motivo distinto: el final de la
+  // pagina. Quien llego al formulario de contacto o al pie ya decidio
+  // escribirnos; ahi el asistente no invita a nada, solo se apoya encima del
+  // contenido. Se retira hasta que la persona vuelva a subir.
+  var zonasQueEstorba = [];
+
+  function agregarZona(selector, margen) {
+    var el = document.querySelector(selector);
+    if (!el) return;
+    var estado = { estorba: false };
+    zonasQueEstorba.push(estado);
+    new IntersectionObserver(function (entries) {
+      estado.estorba = entries[0].isIntersecting;
+      revisarEstorbo();
+    }, { threshold: 0, rootMargin: margen }).observe(el);
+  }
+
+  function revisarEstorbo() {
+    buhoDoctorEstorba = zonasQueEstorba.some(function (z) { return z.estorba; });
+    if (buhoDoctorEstorba) {
+      if (asistenteVisible) ocultarAsistentePorEstorbo();
+    } else if (window.scrollY > scrollThreshold) {
+      mostrarAsistente();   // ya no estorba: puede volver
+    }
+  }
+
+  if ('IntersectionObserver' in window) {
+    // El buho grande: solo cuando cae en la franja central, que es la unica
+    // altura donde el asistente realmente esta.
+    agregarZona('#buhoDoctor', '-42% 0px -42% 0px');
+    // El cierre de la pagina: apenas asoma, el asistente se va.
+    agregarZona('#cta-final', '0px');
+    agregarZona('#contacto', '0px');
+    agregarZona('.footer', '0px');
   }
 
   // Función global para ocultarlo manualmente (con la X) — tiene acceso al closure
