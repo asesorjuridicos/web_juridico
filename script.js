@@ -932,8 +932,8 @@ function initSideRobot() {
   // En reposo usa idle.gif y solo pasa a wave.gif durante el saludo: antes
   // wave.gif quedaba en bucle permanente, animandose incluso con el asistente
   // fuera de pantalla.
-  var SIDE_IDLE_SRC = 'assets/buho/idle.gif';
-  var SIDE_WAVE_SRC = 'assets/buho/wave.gif';
+  var SIDE_IDLE_SRC = 'assets/buho/idle.gif?v=2';
+  var SIDE_WAVE_SRC = 'assets/buho/wave.gif?v=2';
   var reduceMotion = prefersReducedMotion();
 
   // width/height explicitos: el navegador reserva el espacio y no hay salto
