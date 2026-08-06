@@ -2341,6 +2341,101 @@ ul, ol { list-style: none; }
   }
 }
 
+/* ===== CAPTURA DE CONTACTO AL CERRAR EL DIAGNOSTICO ===== */
+.captura {
+  margin: 1.5rem 0 1.25rem;
+  padding: 1.15rem 1rem 1rem;
+  border: 1px solid rgba(212,175,55,0.35);
+  border-radius: 0.9rem;
+  background: rgba(7,18,38,0.55);
+  text-align: center;
+}
+
+.captura-titulo {
+  font-weight: 700;
+  color: #f2d98b;
+  font-size: 0.98rem;
+  margin-bottom: 0.2rem;
+}
+
+.captura-sub {
+  color: #b9c5da;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin-bottom: 0.9rem;
+}
+
+/* Trampa para robots: fuera de pantalla en vez de display:none, porque hay
+   bots que ignoran los campos ocultos con display. */
+.captura-honey {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.captura-campos {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 560px) {
+  .captura-campos { grid-template-columns: 1fr 1fr; }
+}
+
+.captura-campos input {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(212,175,55,0.3);
+  background: rgba(255,255,255,0.06);
+  color: #f5f8ff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  /* 16px reales en movil evitan que iOS haga zoom al enfocar el campo */
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+@media (max-width: 559px) {
+  .captura-campos input { font-size: 1rem; }
+}
+
+.captura-campos input::placeholder { color: #8fa0b8; }
+
+.captura-campos input:focus {
+  outline: none;
+  border-color: rgba(224,184,76,0.8);
+  background: rgba(255,255,255,0.1);
+}
+
+.captura-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.captura-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.captura-estado {
+  font-size: 0.8rem;
+  margin-top: 0.6rem;
+  min-height: 1em;
+  color: #b9c5da;
+}
+
+.captura-estado.error { color: #ffb4a8; }
+
+.captura-ok {
+  border-color: rgba(120,220,160,0.45);
+  background: rgba(20,60,42,0.45);
+}
+
+.captura-ok .captura-titulo { color: #8fe6b4; }
+
 /* ===== DIAGNOSTIC HIDDEN STATES ===== */
 .diagnostic-step { display: none; }
 .diagnostic-step.active { display: block; }

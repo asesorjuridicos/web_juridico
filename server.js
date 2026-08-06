@@ -14,6 +14,9 @@ const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const CACHE_FILE = path.join(DATA_DIR, 'chaco-rates-cache.json');
 const VISITS_FILE = path.join(DATA_DIR, 'visits.json');
+// Registro propio de consultas, una por linea (JSONL): es a prueba de
+// escrituras simultaneas y se puede leer con cualquier editor.
+const CONSULTAS_FILE = path.join(DATA_DIR, 'consultas.jsonl');
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const VISITS_BASELINE = 800;
 const VISIT_DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000;
@@ -59,6 +62,7 @@ const SMTP_SOCKET_TIMEOUT_MS = Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 1500
 // Aviso por WhatsApp (CallMeBot). El correo sigue siendo el canal principal:
 // esto es solo una notificacion, y si falla no afecta el envio de la consulta.
 const WHATSAPP_ALERT_PATHS = new Set(['/api/aviso-whatsapp', '/api/aviso-whatsapp/']);
+const CONSULTAS_PATHS = new Set(['/api/consultas', '/api/consultas/']);
 const CALLMEBOT_PHONE = String(process.env.CALLMEBOT_PHONE || '').trim();
 const CALLMEBOT_APIKEY = String(process.env.CALLMEBOT_APIKEY || '').trim();
 const CALLMEBOT_TIMEOUT_MS = Number(process.env.CALLMEBOT_TIMEOUT_MS || 8000);
@@ -1032,6 +1036,165 @@ async function handleWhatsappAlertRequest(req, res) {
   }
 }
 
+// ===== REGISTRO PROPIO DE CONSULTAS =====
+// Por que existe: hasta ahora toda consulta viajaba del navegador a Web3Forms
+// y de ahi al correo del estudio. Si esa llamada fallaba (servicio caido, cupo
+// mensual agotado, un bloqueador de publicidad, el visitante sin senal) la
+// consulta no quedaba en ninguna parte: ni el estudio se enteraba, ni habia
+// forma de recuperarla. Un unico punto de falla, y encima externo.
+//
+// Este endpoint guarda la consulta en el propio servidor ANTES de intentar
+// cualquier envio, y dispara los avisos por su cuenta. Web3Forms sigue
+// funcionando igual que siempre, pero deja de ser el unico camino.
+//
+// Aviso sobre la duracion del archivo: en planes con disco efimero (Render
+// gratuito, por ejemplo) data/consultas.jsonl se borra en cada despliegue o
+// reinicio. Sirve como red de seguridad y como registro para consultar entre
+// despliegues, pero el canal duradero siguen siendo el correo y el WhatsApp.
+// Para archivo permanente hace falta un disco persistente o una base de datos.
+function normalizePhone(value) {
+  return String(value || '').replace(/[^\d+]/g, '').slice(0, 25);
+}
+
+function validateConsultaPayload(body) {
+  const cleaned = {
+    origen: normalizeSingleLine(body && body.origen, 40) || 'formulario',
+    nombre: normalizeSingleLine(body && body.nombre, 120),
+    email: normalizeSingleLine(body && body.email, 180).toLowerCase(),
+    telefono: normalizePhone(body && body.telefono),
+    consulta: normalizeMultiline(body && body.consulta, 4000),
+    diagnostico: normalizeMultiline(body && body.diagnostico, 1200),
+    website: normalizeSingleLine((body && (body.website || body._honey)) || '', 120)
+  };
+
+  const errors = [];
+
+  if (cleaned.website) {
+    return { isSpam: true, cleaned, errors };
+  }
+
+  if (cleaned.nombre.length < 2) {
+    errors.push('Ingrese un nombre valido.');
+  }
+  // A diferencia del formulario de contacto, aca alcanza con UNO de los dos:
+  // en el diagnostico se pide el telefono, que es lo que el estudio usa.
+  const tieneEmail = isValidEmail(cleaned.email);
+  const tieneTelefono = cleaned.telefono.replace(/\D/g, '').length >= 6;
+  if (!tieneEmail && !tieneTelefono) {
+    errors.push('Deje un telefono o un correo para poder responderle.');
+  }
+
+  return { isSpam: false, cleaned, errors };
+}
+
+function guardarConsulta(registro) {
+  ensureDataDir();
+  fs.appendFileSync(CONSULTAS_FILE, JSON.stringify(registro) + '\n', 'utf8');
+}
+
+async function handleConsultaRequest(req, res) {
+  if (req.method !== 'POST') {
+    sendJson(res, 405, { ok: false, error: 'METHOD_NOT_ALLOWED' });
+    return;
+  }
+
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    sendJson(res, 400, { ok: false, error: 'INVALID_REQUEST' });
+    return;
+  }
+
+  const ip = getClientIp(req);
+  if (isContactRateLimited(ip)) {
+    sendJson(res, 429, {
+      ok: false,
+      error: 'RATE_LIMIT',
+      message: 'Demasiados intentos. Espere unos minutos.'
+    });
+    return;
+  }
+
+  const validation = validateConsultaPayload(body);
+  // Al spam se le contesta que si, para que el bot no siga probando.
+  if (validation.isSpam) {
+    sendJson(res, 200, { ok: true, guardada: false });
+    return;
+  }
+  if (validation.errors.length) {
+    sendJson(res, 400, {
+      ok: false,
+      error: 'VALIDATION_ERROR',
+      message: validation.errors[0],
+      issues: validation.errors
+    });
+    return;
+  }
+
+  const c = validation.cleaned;
+  const registro = {
+    fecha: new Date().toISOString(),
+    origen: c.origen,
+    nombre: c.nombre,
+    email: c.email || null,
+    telefono: c.telefono || null,
+    consulta: c.consulta || null,
+    diagnostico: c.diagnostico || null,
+    ip: ip || null,
+    userAgent: normalizeSingleLine(req.headers['user-agent'], 300) || null
+  };
+
+  // 1. Guardar es lo primero y lo unico que decide la respuesta al visitante.
+  let guardada = false;
+  try {
+    guardarConsulta(registro);
+    guardada = true;
+  } catch (error) {
+    console.error('CONSULTA_GUARDAR_ERROR', error && error.message ? error.message : error);
+  }
+
+  // 2. Los avisos son accesorios y van por su cuenta: que uno falle no debe
+  //    tumbar al otro ni afectar lo que ve el visitante.
+  const textoConsulta = [c.consulta, c.diagnostico ? `[Diagnostico] ${c.diagnostico}` : '']
+    .filter(Boolean)
+    .join('\n\n') || '(sin detalle)';
+  const contactoTexto = [c.email, c.telefono].filter(Boolean).join(' / ');
+
+  const avisos = [];
+  if (isWhatsappAlertConfigured()) {
+    avisos.push(
+      sendWhatsappAlert({ nombre: c.nombre, email: contactoTexto, consulta: textoConsulta })
+        .catch((error) => {
+          console.error('CONSULTA_WHATSAPP_ERROR', error && error.message ? error.message : error);
+        })
+    );
+  }
+  if (isEmailConfigured()) {
+    avisos.push(
+      sendContactEmail(
+        { nombre: c.nombre, email: c.email || CONTACT_TO_EMAIL, consulta: textoConsulta },
+        { ip, userAgent: req.headers['user-agent'] }
+      ).catch((error) => {
+        console.error('CONSULTA_EMAIL_ERROR', error && error.message ? error.message : error);
+      })
+    );
+  }
+  await Promise.all(avisos);
+
+  if (!guardada && !avisos.length) {
+    // Ni se guardo ni habia forma de avisar: hay que decirlo, no fingir exito.
+    sendJson(res, 500, {
+      ok: false,
+      error: 'CONSULTA_NO_REGISTRADA',
+      message: 'No pudimos registrar su consulta. Escribanos por WhatsApp.'
+    });
+    return;
+  }
+
+  sendJson(res, 200, { ok: true, guardada });
+}
+
 async function handleContactRequest(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, {
@@ -1204,6 +1367,11 @@ const server = http.createServer(async (req, res) => {
 
   if (WHATSAPP_ALERT_PATHS.has(pathname)) {
     await handleWhatsappAlertRequest(req, res);
+    return;
+  }
+
+  if (CONSULTAS_PATHS.has(pathname)) {
+    await handleConsultaRequest(req, res);
     return;
   }
 

@@ -1614,6 +1614,7 @@ function renderResult() {
       '<h3 class="font-serif text-white" style="font-size:1.5rem;font-weight:700;margin-bottom:0.75rem;">Auditoría completa finalizada.</h3>' +
       '<p class="text-muted text-base" style="line-height:1.65;margin-bottom:0.5rem;">Detectamos <strong style="color:#d4af37;">rutas de acción viables</strong> con potencial estratégico para su situación legal.</p>' +
       '<p class="text-light-gray text-sm" style="margin-bottom:1.5rem;">Comparta su caso por WhatsApp para recibir la recomendación priorizada y próximos pasos.</p>' +
+      buildCapturaHTML('capturaCompleto') +
       '<div class="result-buttons">' +
         '<a href="' + WA_LINK + '" target="_blank" rel="noopener noreferrer" class="btn-gold-solid">Solicitar análisis por WhatsApp</a>' +
         '<button class="btn-reset" onclick="resetDiagnostic()">Reiniciar diagnóstico completo</button>' +
@@ -2036,6 +2037,126 @@ function getExpressStats() {
   return map[expressState.areaKey] || { total: 6, viable: 1 };
 }
 
+// ===== CAPTURA DE CONTACTO AL CERRAR EL DIAGNOSTICO =====
+// Quien llega hasta el resultado acaba de contar su problema legal: es el
+// momento de mayor intencion de toda la web. Antes lo unico que se le ofrecia
+// era un boton de WhatsApp y, si no lo tocaba, no quedaba ningun rastro de que
+// habia estado ni de que necesitaba. Este bloque recupera esos casos.
+//
+// Se piden solo dos datos, y el telefono antes que el correo, porque el canal
+// real del estudio es WhatsApp. Cuantos menos campos, mas gente lo completa.
+function buildCapturaHTML(formId) {
+  return '' +
+    '<form class="captura" id="' + formId + '" onsubmit="enviarCaptura(event)" novalidate>' +
+      '<p class="captura-titulo">¿Quiere que un abogado revise su caso?</p>' +
+      '<p class="captura-sub">Déjenos sus datos y nos comunicamos a la brevedad.</p>' +
+      // Trampa para robots: invisible para las personas, irresistible para un bot.
+      '<input type="text" name="website" class="captura-honey" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
+      '<div class="captura-campos">' +
+        '<input type="text" name="nombre" placeholder="Su nombre" autocomplete="name" required />' +
+        '<input type="tel" name="telefono" placeholder="Teléfono / WhatsApp" autocomplete="tel" inputmode="tel" required />' +
+      '</div>' +
+      '<button type="submit" class="btn-gold-solid captura-btn">Solicitar que me contacten</button>' +
+      '<p class="captura-estado" role="status" aria-live="polite"></p>' +
+    '</form>';
+}
+
+// Resume las respuestas del diagnostico para que el estudio sepa de que se
+// trata el caso antes de devolver la llamada.
+function resumenDiagnosticoActivo() {
+  var partes = [];
+  var panel = document.querySelector('.ia-panel:not(.is-hidden)');
+  var esExpress = !panel || panel.id === 'iaPanelExpress';
+
+  if (esExpress) {
+    if (expressState.areaLabel) partes.push('Área: ' + expressState.areaLabel);
+    if (expressState.primaryLabel) partes.push(expressState.primaryLabel);
+    if (expressState.urgencyLabel) partes.push('Urgencia: ' + expressState.urgencyLabel);
+    if (expressState.docsLabel) partes.push('Documentación: ' + expressState.docsLabel);
+  } else if (diagnosticState && diagnosticState.answers && diagnosticState.answers.length) {
+    partes = diagnosticState.answers.slice();
+  }
+
+  return (esExpress ? 'Diagnóstico Express' : 'Diagnóstico Completo') +
+    (partes.length ? ' — ' + partes.join(' · ') : '');
+}
+
+function enviarCaptura(e) {
+  e.preventDefault();
+
+  var form = e.target;
+  var btn = form.querySelector('.captura-btn');
+  var estado = form.querySelector('.captura-estado');
+  var campoNombre = form.querySelector('[name="nombre"]');
+  var campoTel = form.querySelector('[name="telefono"]');
+
+  var nombre = String(campoNombre ? campoNombre.value : '').trim();
+  var telefono = String(campoTel ? campoTel.value : '').trim();
+  var honey = String((form.querySelector('[name="website"]') || {}).value || '').trim();
+
+  function fallar(mensaje, campo) {
+    if (estado) {
+      estado.textContent = mensaje;
+      estado.className = 'captura-estado error';
+    }
+    if (campo && campo.focus) campo.focus();
+  }
+
+  if (nombre.length < 2) { fallar('Por favor ingrese su nombre.', campoNombre); return; }
+  if (telefono.replace(/\D/g, '').length < 6) {
+    fallar('Ingrese un teléfono válido para poder contactarlo.', campoTel);
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  if (estado) { estado.textContent = ''; estado.className = 'captura-estado'; }
+
+  var resumen = resumenDiagnosticoActivo();
+
+  // El correo sale por el mismo camino que ya usa el formulario de contacto.
+  // Es accesorio: si falla, la consulta igual quedo registrada en el servidor.
+  try {
+    fetch(CONTACT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        access_key: CONTACT_ACCESS_KEY,
+        subject: 'Diagnóstico IA — ' + nombre + ' (' + telefono + ')',
+        from_name: 'Web Juridico',
+        botcheck: honey ? true : false,
+        Nombre: nombre,
+        Telefono: telefono,
+        Consulta: resumen
+      }),
+      keepalive: true
+    }).catch(function () {});
+  } catch (error) { /* sin efecto para el visitante */ }
+
+  registrarConsulta({
+    origen: 'diagnostico',
+    nombre: nombre,
+    telefono: telefono,
+    diagnostico: resumen,
+    website: honey
+  }).then(function (r) {
+    if (r.ok) {
+      registrarEvento('lead_diagnostico', { origen: 'diagnostico' });
+      form.innerHTML =
+        '<p class="captura-titulo">✓ Recibimos su consulta</p>' +
+        '<p class="captura-sub">Nos comunicamos con usted a la brevedad. ' +
+        'Si prefiere, puede escribirnos ahora mismo por WhatsApp.</p>';
+      form.classList.add('captura-ok');
+      return;
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Solicitar que me contacten'; }
+    // El limite de intentos no es un fallo: conviene decir la verdad para que
+    // la persona no crea que el sitio esta roto y se vaya.
+    fallar(r.limite
+      ? (r.mensaje || 'Ya registramos varias consultas suyas. Aguarde unos minutos o escríbanos por WhatsApp.')
+      : 'No pudimos registrar su consulta. Escríbanos por WhatsApp y lo atendemos igual.');
+  });
+}
+
 function renderExpressResult() {
   var container = document.getElementById('expressStep4');
   if (!container) return;
@@ -2069,6 +2190,7 @@ function renderExpressResult() {
         '<span class="result-stats-number">' + stats.total + '</span>' +
         '<span class="result-stats-text">casos similares analizados<br><strong>' + rutasText + ' detectada' + (stats.viable > 1 ? 's' : '') + '</strong> para esta situación</span>' +
       '</div>' +
+      buildCapturaHTML('capturaExpress') +
       '<div class="result-buttons">' +
         '<a href="' + waLink + '" target="_blank" rel="noopener noreferrer" class="btn-gold-solid">Continuar por WhatsApp</a>' +
         '<button type="button" class="btn-reset" onclick="resetExpressDiagnostic()">Nuevo diagnóstico</button>' +
@@ -2109,20 +2231,59 @@ document.addEventListener('click', function (e) {
   }
 });
 
-// Aviso interno por WhatsApp. Es accesorio: se dispara despues de que la
-// consulta ya salio por correo y cualquier fallo se ignora en silencio.
-function notifyWhatsapp(nombre, email, consulta) {
+// ===== REGISTRO DE LA CONSULTA EN NUESTRO PROPIO SERVIDOR =====
+// Web3Forms entrega el correo, pero es un servicio externo: si esta caido, si
+// se agoto el cupo mensual, si un bloqueador de publicidad corta la peticion o
+// si al visitante se le cae la senal, la consulta no queda en ningun lado y el
+// estudio nunca se entera de que existio.
+//
+// Por eso toda consulta se registra primero contra /api/consultas, que la
+// guarda en el servidor y dispara los avisos por su cuenta. Web3Forms sigue
+// funcionando igual, pero ya no es el unico camino.
+//
+// Devuelve una promesa que NUNCA se rechaza: el registro es una red de
+// seguridad y no debe romper el envio si algo sale mal.
+function registrarConsulta(datos) {
+  var payload = {
+    origen: datos.origen || 'formulario',
+    nombre: datos.nombre || '',
+    email: datos.email || '',
+    telefono: datos.telefono || '',
+    consulta: datos.consulta || '',
+    diagnostico: datos.diagnostico || '',
+    website: datos.website || ''
+  };
+
   try {
-    fetch('/api/aviso-whatsapp', {
+    return fetch('/api/consultas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, email: email, consulta: consulta }),
+      body: JSON.stringify(payload),
       keepalive: true
-    }).catch(function () {});
+    })
+      .then(function (res) {
+        return res.json()
+          .catch(function () { return {}; })
+          .then(function (data) {
+            return {
+              ok: !!(data && data.ok),
+              guardada: !!(data && data.guardada),
+              limite: res.status === 429,
+              mensaje: (data && data.message) || ''
+            };
+          });
+      })
+      .catch(function () { return { ok: false, guardada: false, limite: false, mensaje: '' }; });
   } catch (error) {
-    // sin efecto para el visitante
+    return Promise.resolve({ ok: false, guardada: false, limite: false, mensaje: '' });
   }
 }
+
+// El aviso interno por WhatsApp lo dispara ahora el propio /api/consultas al
+// registrar la consulta, asi que desde el navegador ya no se llama a
+// /api/aviso-whatsapp. Sale mejor: antes el aviso dependia de que Web3Forms
+// respondiera bien, y si ese servicio fallaba el estudio no se enteraba de
+// nada. El endpoint del servidor sigue disponible por compatibilidad.
 
 function handleContactSubmit(e) {
   e.preventDefault();
@@ -2151,6 +2312,16 @@ function handleContactSubmit(e) {
   var email = String(formData.get('email') || '').trim();
   var consulta = String(formData.get('consulta') || '').trim();
   var honeypot = String(formData.get('website') || formData.get('_honey') || '').trim();
+
+  // Se registra ANTES de intentar el envio externo: si Web3Forms falla, la
+  // consulta ya quedo guardada en nuestro servidor y el estudio igual se entera.
+  registrarConsulta({
+    origen: 'formulario',
+    nombre: nombre,
+    email: email,
+    consulta: consulta,
+    website: honeypot
+  });
 
   // El envio va directo desde el navegador a Web3Forms: el plan gratuito solo
   // acepta solicitudes del lado del cliente. La access key es publica por diseno.
@@ -2200,7 +2371,9 @@ function handleContactSubmit(e) {
           status.classList.add('success');
         }
         registrarEvento('generate_lead', { method: 'formulario_contacto' });
-        notifyWhatsapp(nombre, email, consulta);
+        // El aviso por WhatsApp ya lo dispara /api/consultas al registrar la
+        // consulta, mas arriba. Avisar de nuevo aca mandaria dos mensajes
+        // iguales al estudio y gastaria dos cupos del limite de intentos.
         form.reset();
       } else {
         // La respuesta de error del servicio viene en ingles: se muestra un
