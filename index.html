@@ -46,7 +46,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
-  <link rel="stylesheet" href="styles.css?v=20260806-11" />
+  <link rel="stylesheet" href="styles.css?v=20260806-12" />
 
   <!-- Datos estructurados: le indican a Google que esto es un estudio
        juridico con direccion, telefono y horarios en Saenz Pena, Chaco. -->
@@ -204,13 +204,17 @@
       <div class="container" style="max-width:1120px;">
         <!-- El Doctor: buho asesor.
              Tres capas apiladas (reposo / lectura / saludo) para poder fundir una
-             con otra. Sirven ademas como precarga: los tres GIF quedan en cache y
-             el cambio de estado es instantaneo.
-             Cada capa guarda su GIF real en data-src. Apenas arranca el JS, las
-             capas inactivas se "aparcan" en un GIF transparente de 1x1, de modo
-             que solo hay UNA animacion viva a la vez. No alcanza con opacity:0 ni
-             visibility:hidden: un <img> oculto puede seguir animandose igual, y eso
-             depende del navegador. Cambiar el src es la unica garantia real. -->
+             con otra, y solo UNA animacion viva a la vez: las capas inactivas
+             quedan "aparcadas" en un GIF transparente de 1x1. No alcanza con
+             opacity:0 ni visibility:hidden, porque un <img> oculto puede seguir
+             animandose igual segun el navegador; cambiar el src es la unica
+             garantia real.
+
+             Las capas nacen aparcadas y sin sprite: el script decide primero si
+             el navegador soporta WebP animado (alfa de 8 bits, ~35% mas liviano)
+             o si hay que caer al GIF, y recien entonces carga el archivo. Asi no
+             se descargan los dos formatos. El nombre va en data-buho, sin
+             extension. Sin JS, vale el <noscript> de abajo. -->
         <div style="display:flex;justify-content:center;margin-bottom:1.5rem;" class="reveal">
           <div
             class="diagnostic-robot"
@@ -221,9 +225,12 @@
             data-owl-state="reposo"
           >
             <span class="diagnostic-robot-shadow" aria-hidden="true"></span>
-            <img src="assets/buho/idle.gif?v=2" data-src="assets/buho/idle.gif?v=2" width="192" height="208" decoding="async" alt="Buho asesor del estudio juridico" class="diagnostic-buho buho-reposo is-active" />
-            <img src="assets/buho/review.gif?v=2" data-src="assets/buho/review.gif?v=2" width="192" height="208" decoding="async" alt="" aria-hidden="true" class="diagnostic-buho buho-lectura" />
-            <img src="assets/buho/wave.gif?v=2" data-src="assets/buho/wave.gif?v=2" width="192" height="208" decoding="async" alt="" aria-hidden="true" class="diagnostic-buho buho-saludo" />
+            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-buho="idle" width="192" height="208" decoding="async" alt="Buho asesor del estudio juridico" class="diagnostic-buho buho-reposo is-active" />
+            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-buho="review" width="192" height="208" decoding="async" alt="" aria-hidden="true" class="diagnostic-buho buho-lectura" />
+            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-buho="wave" width="192" height="208" decoding="async" alt="" aria-hidden="true" class="diagnostic-buho buho-saludo" />
+            <noscript>
+              <img src="assets/buho/idle.gif?v=2" width="192" height="208" alt="Buho asesor del estudio juridico" class="diagnostic-buho is-active" />
+            </noscript>
           </div>
         </div>
 
@@ -658,7 +665,7 @@
     </svg>
   </a>
 
-  <script src="script.js?v=20260806-4"></script>
+  <script src="script.js?v=20260806-5"></script>
 </body>
 </html>
 

@@ -709,10 +709,57 @@ var OWL_ACTIVITY_THROTTLE = 250;
 var OWL_FADE_MS = 220;       // idem: duracion del fundido en styles.css
 // GIF transparente de 1x1. Un <img> apuntando aca no tiene nada que animar.
 var OWL_BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+var OWL_VERSION = '?v=2';    // rompe la cache de las versiones con el halo viejo
 
 function prefersReducedMotion() {
   return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
+
+// ===== FORMATO DEL BUHO: WEBP ANIMADO CON RESPALDO A GIF =====
+// El GIF solo admite transparencia de 1 bit y por eso el borde queda duro. El
+// WebP animado trae alfa de 8 bits (el sprite se funde con cualquier fondo) y
+// pesa un 33-38% menos. Como no es universal, se elige en tiempo de ejecucion.
+//
+// No alcanza con preguntar por "image/webp": Safari 14 y 15 soportan WebP
+// estatico pero NO animado, y mostrarian una imagen rota. Por eso se decodifica
+// un WebP animado de verdad (1 cuadro, ~100 bytes) y se mira si carga.
+var OWL_FORMATO = { ext: null, esperando: [] };
+
+// WebP animado minimo, de la guia de deteccion de formatos de Google.
+var OWL_WEBP_TEST = 'data:image/webp;base64,UklGRlIAAABXRUJQVlA4WAoAAAASAAAAAAAAAAAAQU5JTQY' +
+  'AAAD/////AABBTk1GJgAAAAAAAAAAAAAAAAAAAGQAAABWUDhMDQAAAC8AAAAQBxAREYiI/gcA';
+
+function resolverFormatoBuho(ext) {
+  if (OWL_FORMATO.ext) return;             // ya resuelto: gana el primero
+  OWL_FORMATO.ext = ext;
+  var pendientes = OWL_FORMATO.esperando;
+  OWL_FORMATO.esperando = [];
+  pendientes.forEach(function (cb) { cb(ext); });
+}
+
+function detectarFormatoBuho() {
+  var probe = new Image();
+  probe.onload = function () {
+    resolverFormatoBuho(probe.width > 0 && probe.height > 0 ? '.webp' : '.gif');
+  };
+  probe.onerror = function () { resolverFormatoBuho('.gif'); };
+  // Red rara o decodificador lento: no se hace esperar al buho, sale con GIF.
+  setTimeout(function () { resolverFormatoBuho('.gif'); }, 400);
+  probe.src = OWL_WEBP_TEST;
+}
+
+// Ejecuta cb con la extension elegida, ya sea ahora o cuando se resuelva.
+function conFormatoBuho(cb) {
+  if (OWL_FORMATO.ext) cb(OWL_FORMATO.ext);
+  else OWL_FORMATO.esperando.push(cb);
+}
+
+// 'idle' -> 'assets/buho/idle.webp?v=2'
+function srcBuho(nombre) {
+  return 'assets/buho/' + nombre + (OWL_FORMATO.ext || '.gif') + OWL_VERSION;
+}
+
+detectarFormatoBuho();
 
 function initOwlDoctor() {
   var root = document.getElementById('owlDoctor');
@@ -737,19 +784,17 @@ function initOwlDoctor() {
   var isHovered = false;
   var inView = true;
 
-  // Mantiene los tres GIF en la cache de memoria del navegador para que
+  // Mantiene los tres sprites en la cache de memoria del navegador para que
   // reactivar una capa sea instantaneo y no dispare una peticion de red.
   var warmup = [];
-  Object.keys(layers).forEach(function (key) {
-    var url = layers[key].getAttribute('data-src');
-    if (!url) return;
-    var pre = new Image();
-    pre.src = url;
-    warmup.push(pre);
-  });
+
+  function urlDe(img) {
+    var nombre = img.getAttribute('data-buho');
+    return nombre ? srcBuho(nombre) : null;
+  }
 
   function liveSrc(img) {
-    var url = img.getAttribute('data-src');
+    var url = urlDe(img);
     if (url && img.getAttribute('src') !== url) img.src = url;
   }
 
@@ -905,12 +950,22 @@ function initOwlDoctor() {
     window.addEventListener(name, onActivity, { passive: true });
   });
 
-  // Estado inicial: solo reposo animandose. Se espera a que las capas terminen
-  // de cargar para no aparcarlas antes de que lleguen a la cache.
-  if (document.readyState === 'complete') parkInactive();
-  else window.addEventListener('load', parkInactive, { once: true });
-
-  scheduleIdle();
+  // Estado inicial. Las capas nacen sin sprite (un 1x1 transparente) y recien
+  // cuando se sabe si el navegador soporta WebP animado se carga el formato
+  // que corresponde. Asi no se descarga el GIF y despues el WebP.
+  conFormatoBuho(function () {
+    liveSrc(layers[state]);   // la capa activa, ya
+    // El resto se precarga en segundo plano, sin ocupar un <img> del documento.
+    Object.keys(layers).forEach(function (key) {
+      if (key === state) return;
+      var url = urlDe(layers[key]);
+      if (!url) return;
+      var pre = new Image();
+      pre.src = url;
+      warmup.push(pre);
+    });
+    scheduleIdle();
+  });
 }
 
 // ===== SIDE ROBOT (ASISTENTE FLOTANTE AL HACER SCROLL) =====
@@ -932,13 +987,16 @@ function initSideRobot() {
   // En reposo usa idle.gif y solo pasa a wave.gif durante el saludo: antes
   // wave.gif quedaba en bucle permanente, animandose incluso con el asistente
   // fuera de pantalla.
-  var SIDE_IDLE_SRC = 'assets/buho/idle.gif?v=2';
-  var SIDE_WAVE_SRC = 'assets/buho/wave.gif?v=2';
+  // La extension (.webp o .gif) la decide srcBuho() segun lo que soporte el
+  // navegador, asi que se pide siempre por funcion y nunca se cachea en una
+  // constante: al arrancar todavia puede no estar resuelta.
   var reduceMotion = prefersReducedMotion();
 
   // width/height explicitos: el navegador reserva el espacio y no hay salto
   // de layout cuando entra el GIF.
-  var robotSvg = '<img src="' + SIDE_IDLE_SRC + '" id="sideRobotBuho" class="side-robot-buho" ' +
+  // Nace aparcado en el 1x1 transparente: el sprite entra cuando se sabe el
+  // formato y cuando el asistente realmente se muestra.
+  var robotSvg = '<img src="' + OWL_BLANK + '" id="sideRobotBuho" class="side-robot-buho" ' +
     'width="192" height="208" decoding="async" alt="Buho asesor" />';
 
   robotContainer.innerHTML =
@@ -950,9 +1008,12 @@ function initSideRobot() {
 
   document.body.appendChild(robotContainer);
 
-  // Precarga de wave.gif para que el saludo no espere a la red en el primer toque.
-  var waveWarmup = new Image();
-  waveWarmup.src = SIDE_WAVE_SRC;
+  // Precarga del saludo para que no espere a la red en el primer toque.
+  var waveWarmup = null;
+  conFormatoBuho(function () {
+    waveWarmup = new Image();
+    waveWarmup.src = srcBuho('wave');
+  });
 
   // --- Microinteraccion de saludo --------------------------------------
   var sideGreetTimer = null;
@@ -971,7 +1032,7 @@ function initSideRobot() {
 
     // Cambiar el src reinicia el GIF desde el primer cuadro: el ala se levanta
     // justo cuando el usuario toca, no en un punto cualquiera del bucle.
-    if (img) img.src = SIDE_WAVE_SRC;
+    if (img) img.src = srcBuho('wave');
     targets.forEach(function (el) {
       if (!el) return;
       el.classList.remove('is-greeting');
@@ -982,7 +1043,7 @@ function initSideRobot() {
     clearTimeout(sideGreetTimer);
     sideGreetTimer = setTimeout(function () {
       targets.forEach(function (el) { if (el) el.classList.remove('is-greeting'); });
-      if (img) img.src = SIDE_IDLE_SRC;
+      if (img) img.src = srcBuho('idle');
       sideGreeting = false;
       if (typeof done === 'function') done();
     }, OWL_GREET_MS);
@@ -1077,16 +1138,7 @@ function initSideRobot() {
   function wakeSideRobotAnimation() {
     clearTimeout(sideParkTimer);
     var img = document.getElementById('sideRobotBuho');
-    if (img && img.getAttribute('src') !== SIDE_IDLE_SRC) img.src = SIDE_IDLE_SRC;
-  }
-
-  // El asistente nace oculto: apenas el GIF queda en cache se lo aparca, y se
-  // reactiva recien al primer scroll que lo muestre.
-  var sideImgEl = document.getElementById('sideRobotBuho');
-  if (sideImgEl) {
-    var parkInitial = function () { if (!sideRobotVisible) sideImgEl.src = OWL_BLANK; };
-    if (sideImgEl.complete) parkInitial();
-    else sideImgEl.addEventListener('load', parkInitial, { once: true });
+    if (img && img.getAttribute('src') !== srcBuho('idle')) img.src = srcBuho('idle');
   }
 
   function getRandomMsg() {
