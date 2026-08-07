@@ -711,6 +711,20 @@ var OWL_FADE_MS = 220;       // idem: duracion del fundido en styles.css
 var OWL_BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 var OWL_VERSION = '?v=2';    // rompe la cache de las versiones con el halo viejo
 
+// El asistente flotante solo sirve para traer a la persona hasta el
+// diagnostico. Una vez que lo empezo, sobra: compite por la atencion justo
+// cuando esta leyendo las preguntas. Antes se iba por un temporizador ciego de
+// 10 segundos, sin relacion con lo que la persona estaba haciendo; por eso se
+// notaba descoordinado. Esta bandera lo retira mientras dure el diagnostico.
+var diagnosticoEnCurso = false;
+var alCambiarDiagnostico = null;   // lo engancha initBuhoAsistente
+
+function marcarDiagnostico(enCurso) {
+  if (diagnosticoEnCurso === enCurso) return;
+  diagnosticoEnCurso = enCurso;
+  if (typeof alCambiarDiagnostico === 'function') alCambiarDiagnostico();
+}
+
 function prefersReducedMotion() {
   return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 }
@@ -1260,13 +1274,17 @@ function initBuhoAsistente() {
   }
 
   function revisarEstorbo() {
-    buhoDoctorEstorba = zonasQueEstorba.some(function (z) { return z.estorba; });
+    buhoDoctorEstorba = diagnosticoEnCurso ||
+      zonasQueEstorba.some(function (z) { return z.estorba; });
     if (buhoDoctorEstorba) {
       if (asistenteVisible) ocultarAsistentePorEstorbo();
     } else if (window.scrollY > scrollThreshold) {
       mostrarAsistente();   // ya no estorba: puede volver
     }
   }
+
+  // Que el diagnostico pueda avisar cuando arranca y cuando se reinicia.
+  alCambiarDiagnostico = revisarEstorbo;
 
   if ('IntersectionObserver' in window) {
     // El buho grande: solo cuando cae en la franja central, que es la unica
@@ -1520,6 +1538,7 @@ function showStep(stepNum) {
 }
 
 function startDiagnostic() {
+  marcarDiagnostico(true);
   diagnosticState.step = 1;
   diagnosticState.answers = [];
   renderQuestion(1);
@@ -1660,6 +1679,7 @@ function renderResult() {
 }
 
 function resetDiagnostic() {
+  marcarDiagnostico(false);
   diagnosticState.step = 0;
   diagnosticState.answers = [];
   if (diagnosticState.processingTimer) {
@@ -1690,6 +1710,7 @@ function showExpressStep(stepNum) {
 }
 
 function resetExpressDiagnostic() {
+  marcarDiagnostico(false);
   expressState.step = 0;
   expressState.currentQuestionId = 'area';
   expressState.areaKey = null;
@@ -1719,6 +1740,7 @@ function resetExpressDiagnostic() {
 }
 
 function startExpressDiagnostic() {
+  marcarDiagnostico(true);
   expressState.currentQuestionId = 'area';
   expressState.history = [];
   expressState.step = 1;
