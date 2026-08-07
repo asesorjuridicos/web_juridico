@@ -1304,7 +1304,8 @@ var questions = [
       { label: 'Inmobiliario', icon: '\uD83C\uDFE0' },
       { label: 'Rural', icon: '\uD83C\uDF3E' },
       { label: 'Sucesiones', icon: '\uD83D\uDCDC' },
-      { label: 'Accidente de tránsito', icon: '\uD83D\uDE97' }
+      { label: 'Accidente de tránsito', icon: '\uD83D\uDE97' },
+      { label: 'Penal', icon: '\uD83D\uDEE1\uFE0F' }
     ]
   },
   {
@@ -1331,7 +1332,17 @@ var EXPRESS_FLOW = {
       { value: 'sucesiones', label: 'Sucesiones' },
       { value: 'inmobiliario', label: 'Inmobiliario' },
       { value: 'ejecuciones', label: 'Ejecuciones' },
-      { value: 'transito', label: 'Accidente de tránsito' }
+      { value: 'transito', label: 'Accidente de tránsito' },
+      { value: 'penal', label: 'Penal' }
+    ]
+  },
+  penal_situacion: {
+    question: '¿Cuál es su situación en el caso penal?',
+    options: [
+      { value: 'imputado', label: 'Estoy imputado o denunciado' },
+      { value: 'detenido', label: 'Hay una persona detenida' },
+      { value: 'citacion', label: 'Recibí una citación judicial' },
+      { value: 'victima', label: 'Soy víctima de un delito' }
     ]
   },
   laboral_role: {
@@ -1817,6 +1828,9 @@ function getNextExpressQuestionId(questionId, optionValue) {
     if (optionValue === 'transito') {
       return 'transito_need';
     }
+    if (optionValue === 'penal') {
+      return 'penal_situacion';
+    }
   }
 
   if (questionId === 'laboral_role') {
@@ -1833,7 +1847,8 @@ function getNextExpressQuestionId(questionId, optionValue) {
     questionId === 'sucesiones_status' ||
     questionId === 'inmobiliario_need' ||
     questionId === 'transito_need' ||
-    questionId === 'ejecuciones_need'
+    questionId === 'ejecuciones_need' ||
+    questionId === 'penal_situacion'
   ) {
     return 'urgency';
   }
@@ -1868,7 +1883,7 @@ function handleExpressOptionSelect(optionValue) {
   } else if (qid === 'laboral_role') {
     expressState.roleKey = optionValue;
     expressState.roleLabel = selectedLabel;
-  } else if (qid === 'laboral_worker_conflict' || qid === 'laboral_employer_conflict' || qid === 'sucesiones_status' || qid === 'inmobiliario_need' || qid === 'transito_need') {
+  } else if (qid === 'laboral_worker_conflict' || qid === 'laboral_employer_conflict' || qid === 'sucesiones_status' || qid === 'inmobiliario_need' || qid === 'transito_need' || qid === 'penal_situacion') {
     expressState.primaryLabel = selectedLabel;
   } else if (qid === 'ejecuciones_type') {
     expressState.executionTypeLabel = selectedLabel;
@@ -2009,6 +2024,20 @@ function getExpressCaseSummary() {
       return 'Su caso involucra ejecución de alquileres adeudados. Se tramitará el cobro judicial de la deuda y, de corresponder, el desalojo de forma simultánea.';
     return 'Su caso de ejecución requiere análisis del título ejecutivo, identificación de bienes del deudor y selección de la vía procesal más expedita en Chaco.';
   }
+  // En materia penal el texto se mantiene deliberadamente prudente: se informa
+  // sobre derechos y plazos, sin anticipar resultados ni calificar la conducta.
+  // Lo que define el caso es la intervencion temprana de un defensor.
+  if (area === 'penal') {
+    if (primary.indexOf('detenida') !== -1)
+      return 'Hay una persona privada de la libertad: es el escenario más urgente. Corresponde intervención inmediata para controlar la legalidad de la detención, asistir a la persona detenida y plantear ante el juzgado los pedidos que correspondan a su situación procesal.';
+    if (primary.indexOf('imputado') !== -1 || primary.indexOf('denunciado') !== -1)
+      return 'Está imputado o denunciado. Tiene derecho a designar abogado defensor desde el primer momento y a negarse a declarar sin que eso lo perjudique. Lo que se declare sin asistencia letrada puede condicionar el resto del proceso, por eso conviene intervenir antes de cualquier acto.';
+    if (primary.indexOf('citación') !== -1 || primary.indexOf('citacion') !== -1)
+      return 'Recibió una citación judicial. En materia penal los plazos son breves y perentorios, y presentarse sin defensa técnica puede comprometer su situación procesal. Lo primero es identificar en qué carácter se lo cita y qué se le atribuye.';
+    if (primary.indexOf('víctima') !== -1 || primary.indexOf('victima') !== -1)
+      return 'Es víctima de un delito. Además de la denuncia, puede constituirse como querellante para impulsar la investigación y ser parte del proceso, en lugar de depender únicamente del avance de la fiscalía.';
+    return 'Su caso penal requiere análisis de la etapa procesal, la prueba reunida y la estrategia de defensa o de impulso de la investigación, según el carácter en que intervenga.';
+  }
   return 'Su caso requiere análisis jurídico personalizado para determinar la mejor estrategia de acción disponible en la jurisdicción de Chaco.';
 }
 
@@ -2049,6 +2078,21 @@ function getExpressDocsNeeded() {
       return ['Pagaré / cheque original', 'Acta de protesto notarial', 'Domicilio del deudor', 'CUIT del deudor (si disponible)'];
     return ['Título ejecutivo original', 'Domicilio del deudor', 'CUIT / CUIL del deudor'];
   }
+  if (area === 'penal') {
+    var penal = ['DNI de la persona involucrada', 'Datos de la causa: número de expediente, fiscalía o juzgado interviniente'];
+    if (primary.indexOf('detenida') !== -1) {
+      penal.push('Lugar exacto donde se encuentra detenida');
+      penal.push('Acta de detención o constancia policial, si se entregó copia');
+    } else if (primary.indexOf('citación') !== -1 || primary.indexOf('citacion') !== -1) {
+      penal.push('Cédula de notificación o citación recibida');
+    } else if (primary.indexOf('víctima') !== -1 || primary.indexOf('victima') !== -1) {
+      penal.push('Copia de la denuncia realizada');
+      penal.push('Certificados médicos, fotografías u otra prueba del hecho');
+    } else {
+      penal.push('Copia de la denuncia o de la imputación, si la tiene');
+    }
+    return penal;
+  }
   return ['DNI del consultante', 'Documentación vinculada al caso'];
 }
 
@@ -2058,7 +2102,8 @@ function getExpressStats() {
     sucesiones:   { total: 5, viable: 1 },
     inmobiliario: { total: 7, viable: 2 },
     transito:     { total: 6, viable: 1 },
-    ejecuciones:  { total: 4, viable: 1 }
+    ejecuciones:  { total: 4, viable: 1 },
+    penal:        { total: 6, viable: 2 }
   };
   return map[expressState.areaKey] || { total: 6, viable: 1 };
 }
