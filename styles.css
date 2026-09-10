@@ -1158,36 +1158,83 @@ ul, ol { list-style: none; }
   border-bottom: 2px solid rgba(212,175,55,0.2);
 }
 
-/* El buho trae su propia animacion en el GIF: no se le suma ninguna
-   animacion ni filtro CSS, que al recalcularse en cada cuadro hacian que
-   se viera entrecortado. */
+/* La hoja original tiene 8 columnas y 11 filas, con celdas de 192 × 208.
+   Se recorta el margen transparente para darle presencia al personaje. */
 .diagnostic-robot {
   position: relative;
   width: 192px;
   height: 208px;
+  overflow: hidden;
 }
 
-/* Pixel art: sin suavizado, para que no se vea borroso al escalar */
-.diagnostic-buho {
+.doctor-carpincho {
   display: block;
-  image-rendering: pixelated;
+  width: 320px;
+  height: 346.6667px;
   position: absolute;
-  top: 0;
-  left: 0;
-  transition: opacity 0.25s ease;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -65%);
+  background-image: url("assets/carpincho/doctor-carpincho-clean.png");
+  background-repeat: no-repeat;
+  background-size: 800% 1100%;
+  background-position: 0 0;
+  animation: carpincho-idle 1.08s steps(6) infinite;
 }
 
-/* Al pasar el mouse, el buho se pone a leer el libro */
-.diagnostic-buho.buho-lectura {
-  opacity: 0;
+/* Al pasar el mouse, consulta su carpeta: fila 3, cuatro fotogramas. */
+.diagnostic-robot:hover .doctor-carpincho {
+  background-position-y: 30%;
+  animation: carpincho-review 1.2s steps(4) infinite;
 }
 
-.diagnostic-robot:hover .buho-lectura {
-  opacity: 1;
+@keyframes carpincho-idle {
+  from { background-position-x: 0%; }
+  to { background-position-x: 85.7142857%; }
 }
 
-.diagnostic-robot:hover .buho-reposo {
-  opacity: 0;
+@keyframes carpincho-review {
+  from { background-position-x: 0%; }
+  to { background-position-x: 57.1428571%; }
+}
+
+@keyframes carpincho-wave {
+  from { background-position-x: 0%; }
+  to { background-position-x: 71.4285714%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-mascot-motion="running"]) .doctor-carpincho,
+  :root:not([data-mascot-motion="running"]) .diagnostic-robot:hover .doctor-carpincho,
+  :root:not([data-mascot-motion="running"]) .side-robot-avatar .doctor-carpincho.doctor-carpincho--saludo {
+    animation: none;
+    background-position: 0 0;
+  }
+}
+
+/* La elección explícita del visitante controla ambas mascotas. */
+:root[data-mascot-motion="paused"] .doctor-carpincho {
+  animation: none !important;
+  background-position: 0 0 !important;
+}
+
+.mascot-motion-toggle {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid rgba(212,175,55,0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: #e0c36c;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.mascot-motion-toggle:hover,
+.mascot-motion-toggle:focus-visible {
+  background: rgba(212,175,55,0.12);
+  outline: 2px solid #d4af37;
+  outline-offset: 3px;
 }
 
 .diagnostic-robot-shadow {
@@ -2190,21 +2237,21 @@ ul, ol { list-style: none; }
   overflow: hidden;
 }
 
-.side-robot-avatar svg {
-  width: 62px;
-  height: 62px;
+/* Saludo: fila 4, cinco fotogramas. La cara queda centrada en el círculo. */
+.side-robot-avatar .doctor-carpincho--saludo {
+  width: 144px;
+  height: 156px;
+  transform: translate(-50%, -52%);
+  background-position-y: 40%;
+  animation: carpincho-wave 1.2s steps(5) infinite;
+  animation-play-state: paused;
 }
 
-/* El buho es mas alto que ancho: se amplia y se baja un poco para que
-   dentro del circulo se vea la cara y no el cuerpo entero. */
-.side-robot-buho {
-  width: 76px;
-  height: auto;
-  image-rendering: pixelated;
-  margin-top: 14px;
+.side-robot-container.visible .doctor-carpincho--saludo {
+  animation-play-state: running;
 }
 
-/* Igual que el buho grande: sin animacion CSS encima del GIF */
+/* El movimiento proviene de los fotogramas de la mascota. */
 .side-robot-avatar {
   animation: none;
 }

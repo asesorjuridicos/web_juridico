@@ -684,6 +684,34 @@ async function handleCalculatorSubmit(e) {
   }
 }
 
+// Preferencia compartida por las dos mascotas, conservada entre visitas.
+function initMascotMotion() {
+  var button = document.getElementById('mascotMotionToggle');
+  if (!button) return;
+  var media = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var preference = null;
+  try {
+    var saved = localStorage.getItem('doctor-carpincho-motion');
+    if (saved === 'running' || saved === 'paused') preference = saved;
+  } catch (_error) { /* El control funciona aunque el almacenamiento esté bloqueado. */ }
+
+  function applyPreference() {
+    var running = preference ? preference === 'running' : !media.matches;
+    document.documentElement.dataset.mascotMotion = running ? 'running' : 'paused';
+    button.textContent = running ? 'Pausar mascota' : 'Animar mascota';
+    button.setAttribute('aria-pressed', String(running));
+  }
+
+  button.addEventListener('click', function() {
+    preference = document.documentElement.dataset.mascotMotion === 'running' ? 'paused' : 'running';
+    try { localStorage.setItem('doctor-carpincho-motion', preference); } catch (_error) {}
+    applyPreference();
+  });
+  media.addEventListener('change', applyPreference);
+  applyPreference();
+  button.hidden = false;
+}
+
 // ===== SIDE ROBOT (ASISTENTE FLOTANTE AL HACER SCROLL) =====
 function initSideRobot() {
   // 1. Crear el HTML del robot dinámicamente
@@ -699,17 +727,18 @@ function initSideRobot() {
     "Estamos en línea para asistirle."
   ];
   
-  // Buho asesor, recortado dentro del circulo del avatar
-  var robotSvg = '<img src="assets/buho/wave.gif" class="side-robot-buho" alt="Buho asesor" />';
+  // Doctor Carpincho saluda dentro del círculo del avatar.
+  var mascotMarkup = '<span class="doctor-carpincho doctor-carpincho--saludo" role="img" aria-label="Doctor Carpincho, asesor del estudio jurídico"></span>';
 
   robotContainer.innerHTML = 
     '<div class="side-robot-avatar" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})">' +
-      robotSvg +
+      mascotMarkup +
       '<div class="side-robot-close" onclick="event.stopPropagation(); hideSideRobot();">✕</div>' +
     '</div>' +
     '<div class="side-robot-bubble" id="sideRobotText" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})" style="cursor:pointer;">Estimado, ¿en qué podemos asesorarle?</div>';
 
   document.body.appendChild(robotContainer);
+  initMascotMotion();
 
   // 2. Lógica de aparición basada en scroll
   var sideRobotVisible = false;
