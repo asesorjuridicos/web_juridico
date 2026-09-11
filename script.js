@@ -138,11 +138,13 @@ function initReveal() {
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
     initReveal();
-    initSideRobot();
+    initBuhoDoctor();
+    initBuhoAsistente();
   });
 } else {
   initReveal();
-  initSideRobot();
+  initBuhoDoctor();
+  initBuhoAsistente();
 }
 
 // ===== HERO CALCULATOR =====
@@ -700,6 +702,10 @@ function initMascotMotion() {
     document.documentElement.dataset.mascotMotion = running ? 'running' : 'paused';
     button.textContent = running ? 'Pausar mascota' : 'Animar mascota';
     button.setAttribute('aria-pressed', String(running));
+    document.querySelectorAll('.diagnostic-buho, .buho-asistente-sprite').forEach(function (img) {
+      var match = (img.getAttribute('src') || '').match(/\/(idle|review|wave)(?:-still)?\.(?:png|webp|gif)/);
+      if (match) img.src = srcBuho(match[1]);
+    });
   }
 
   button.addEventListener('click', function() {
@@ -712,13 +718,318 @@ function initMascotMotion() {
   button.hidden = false;
 }
 
-// ===== SIDE ROBOT (ASISTENTE FLOTANTE AL HACER SCROLL) =====
-function initSideRobot() {
-  // 1. Crear el HTML del robot dinámicamente
-  var robotContainer = document.createElement('div');
-  robotContainer.className = 'side-robot-container';
-  robotContainer.id = 'sideRobot';
+
+// ===== DOCTOR CARPINCHO (SECCION DIAGNOSTICO) =====
+// Maquina de estados de tres capas: 'reposo' (idle.gif), 'lectura' (review.gif,
+// el buho hojea el libro) y 'saludo' (wave.gif, levanta el ala).
+//
+// Por que no basta con :hover:
+//   En telefonos no existe el cursor, asi que la animacion de lectura no se
+//   veia nunca y el GIF igual consumia CPU. Ahora la lectura entra sola tras
+//   unos segundos sin interaccion, y el saludo se dispara al tocar.
+//
+// Cuidados de rendimiento:
+//   - Solo UNA animacion viva a la vez. Las capas inactivas quedan aparcadas en
+//     un GIF transparente de 1x1: ocultarlas con opacity/visibility no basta,
+//     porque un <img> oculto puede seguir animandose segun el navegador.
+//   - El temporizador de inactividad se apaga si el buho sale de pantalla o si
+//     la pestana pasa a segundo plano.
+//   - Los listeners de actividad son passive y estan limitados por tiempo para
+//     no reprogramar el timer en cada pixel de scroll.
+var OWL_IDLE_DELAY = 6000;   // ms sin interaccion antes de ponerse a leer
+var OWL_GREET_MS = 780;      // debe coincidir con la duracion de la animacion CSS
+var OWL_ACTIVITY_THROTTLE = 250;
+var OWL_FADE_MS = 220;       // idem: duracion del fundido en styles.css
+// GIF transparente de 1x1. Un <img> apuntando aca no tiene nada que animar.
+var OWL_BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+var OWL_VERSION = '?v=2';    // rompe la cache de las versiones con el halo viejo
+
+// El asistente flotante solo sirve para traer a la persona hasta el
+// diagnostico. Una vez que lo empezo, sobra: compite por la atencion justo
+// cuando esta leyendo las preguntas. Antes se iba por un temporizador ciego de
+// 10 segundos, sin relacion con lo que la persona estaba haciendo; por eso se
+// notaba descoordinado. Esta bandera lo retira mientras dure el diagnostico.
+var diagnosticoEnCurso = false;
+var alCambiarDiagnostico = null;   // lo engancha initBuhoAsistente
+
+function marcarDiagnostico(enCurso) {
+  if (diagnosticoEnCurso === enCurso) return;
+  diagnosticoEnCurso = enCurso;
+  if (typeof alCambiarDiagnostico === 'function') alCambiarDiagnostico();
+}
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// ===== FORMATO DEL BUHO: WEBP ANIMADO CON RESPALDO A GIF =====
+// El GIF solo admite transparencia de 1 bit y por eso el borde queda duro. El
+// WebP animado trae alfa de 8 bits (el sprite se funde con cualquier fondo) y
+// pesa un 33-38% menos. Como no es universal, se elige en tiempo de ejecucion.
+//
+// No alcanza con preguntar por "image/webp": Safari 14 y 15 soportan WebP
+// estatico pero NO animado, y mostrarian una imagen rota. Por eso se decodifica
+// un WebP animado de verdad (1 cuadro, ~100 bytes) y se mira si carga.
+var OWL_FORMATO = { ext: null, esperando: [] };
+
+// WebP animado minimo, de la guia de deteccion de formatos de Google.
+var OWL_WEBP_TEST = 'data:image/webp;base64,UklGRlIAAABXRUJQVlA4WAoAAAASAAAAAAAAAAAAQU5JTQY' +
+  'AAAD/////AABBTk1GJgAAAAAAAAAAAAAAAAAAAGQAAABWUDhMDQAAAC8AAAAQBxAREYiI/gcA';
+
+function resolverFormatoBuho(ext) {
+  if (OWL_FORMATO.ext) return;             // ya resuelto: gana el primero
+  OWL_FORMATO.ext = ext;
+  var pendientes = OWL_FORMATO.esperando;
+  OWL_FORMATO.esperando = [];
+  pendientes.forEach(function (cb) { cb(ext); });
+}
+
+function detectarFormatoBuho() {
+  var probe = new Image();
+  probe.onload = function () {
+    resolverFormatoBuho(probe.width > 0 && probe.height > 0 ? '.webp' : '.gif');
+  };
+  probe.onerror = function () { resolverFormatoBuho('.gif'); };
+  // Red rara o decodificador lento: no se hace esperar al buho, sale con GIF.
+  setTimeout(function () { resolverFormatoBuho('.gif'); }, 400);
+  probe.src = OWL_WEBP_TEST;
+}
+
+// Ejecuta cb con la extension elegida, ya sea ahora o cuando se resuelva.
+function conFormatoBuho(cb) {
+  if (OWL_FORMATO.ext) cb(OWL_FORMATO.ext);
+  else OWL_FORMATO.esperando.push(cb);
+}
+
+// 'idle' -> 'assets/buho/idle.webp?v=2'
+function srcBuho(nombre) {
+  var paused = document.documentElement.dataset.mascotMotion === 'paused';
+  return 'assets/carpincho/' + nombre + (paused ? '-still.png' : (OWL_FORMATO.ext || '.gif')) + '?v=20260910-4';
+}
+
+initMascotMotion();
+detectarFormatoBuho();
+
+function initBuhoDoctor() {
+  var root = document.getElementById('buhoDoctor');
+  if (!root) return;
+
+  var layers = {
+    reposo: root.querySelector('.buho-reposo'),
+    lectura: root.querySelector('.buho-lectura'),
+    saludo: root.querySelector('.buho-saludo')
+  };
+  if (!layers.reposo || !layers.lectura || !layers.saludo) return;
+
+  var reduceMotion = prefersReducedMotion();
+  var canHover = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+
+  var state = 'reposo';
+  var idleTimer = null;
+  var greetTimer = null;
+  var parkTimer = null;
+  var lastActivityAt = 0;
+  var isGreeting = false;
+  var isHovered = false;
+  var inView = true;
+
+  // Mantiene los tres sprites en la cache de memoria del navegador para que
+  // reactivar una capa sea instantaneo y no dispare una peticion de red.
+  var warmup = [];
+
+  function urlDe(img) {
+    var nombre = img.getAttribute('data-buho');
+    return nombre ? srcBuho(nombre) : null;
+  }
+
+  function liveSrc(img) {
+    var url = urlDe(img);
+    if (url && img.getAttribute('src') !== url) img.src = url;
+  }
+
+  // Aparca en el GIF vacio todas las capas que no sean la activa. Se llama al
+  // terminar el fundido para no cortar la transicion a mitad de camino.
+  function parkInactive() {
+    Object.keys(layers).forEach(function (key) {
+      if (key === state) return;
+      var img = layers[key];
+      if (img.getAttribute('src') !== OWL_BLANK) img.src = OWL_BLANK;
+    });
+  }
+
+  function setState(next) {
+    if (state === next || !layers[next]) return;
+    liveSrc(layers[next]);               // reanuda el GIF entrante (desde cache)
+    if (layers[state]) layers[state].classList.remove('is-active');
+    layers[next].classList.add('is-active');
+    state = next;
+    root.setAttribute('data-owl-state', next);
+
+    clearTimeout(parkTimer);
+    parkTimer = setTimeout(parkInactive, OWL_FADE_MS + 60);
+  }
+
+  function stopIdleTimer() {
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+  }
+
+  function scheduleIdle() {
+    stopIdleTimer();
+    // Nada de temporizadores si el buho no se ve o esta saludando.
+    if (!inView || isGreeting || isHovered || document.hidden) return;
+    idleTimer = setTimeout(function () {
+      setState('lectura');
+    }, OWL_IDLE_DELAY);
+  }
+
+  function onActivity() {
+    var now = Date.now();
+    if (now - lastActivityAt < OWL_ACTIVITY_THROTTLE) return;
+    lastActivityAt = now;
+    if (isGreeting || isHovered) return;
+    if (state === 'lectura') setState('reposo');
+    scheduleIdle();
+  }
+
+  // Lleva al usuario al modulo de IA y, si el panel activo todavia esta en el
+  // paso inicial, arranca el diagnostico. Si ya hay uno en curso solo hace
+  // scroll, para no pisar la respuesta a medio responder.
+  function openDiagnostic() {
+    var area = document.getElementById('diagnosticArea');
+    if (area && typeof area.scrollIntoView === 'function') {
+      area.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+    }
+
+    var panel = document.querySelector('.ia-panel:not(.is-hidden)');
+    if (!panel) return;
+    var activeStep = panel.querySelector('.diagnostic-step.active');
+    if (!activeStep) return;
+    if (activeStep.id !== 'expressStep0' && activeStep.id !== 'step0') return;
+    var startBtn = activeStep.querySelector('button');
+    if (startBtn) startBtn.click();
+  }
+
+  function greet(done) {
+    if (isGreeting) return;
+    isGreeting = true;
+    stopIdleTimer();
+    setState('saludo');
+
+    // Reinicio forzado de la animacion por si se toca dos veces seguidas.
+    root.classList.remove('is-greeting');
+    void root.offsetWidth;
+    root.classList.add('is-greeting');
+
+    clearTimeout(greetTimer);
+    greetTimer = setTimeout(function () {
+      root.classList.remove('is-greeting');
+      isGreeting = false;
+      setState(isHovered ? 'lectura' : 'reposo');
+      scheduleIdle();
+      if (typeof done === 'function') done();
+    }, OWL_GREET_MS);
+  }
+
+  function activate() {
+    if (isGreeting) return;
+    // Con movimiento reducido se salta el saludo y se va directo a la accion.
+    if (document.documentElement.dataset.mascotMotion === 'paused') { openDiagnostic(); return; }
+    greet(openDiagnostic);
+  }
+
+  // --- Interaccion: click y touchstart ---------------------------------
+  // En tactil el `click` sintetico llega despues del `touchstart` ya atendido,
+  // asi que se descarta con una ventana de tiempo para no saludar dos veces.
+  var lastTouchAt = 0;
+
+  root.addEventListener('touchstart', function () {
+    lastTouchAt = Date.now();
+    activate();
+  }, { passive: true });
+
+  root.addEventListener('click', function () {
+    if (Date.now() - lastTouchAt < 900) return;
+    activate();
+  });
+
+  root.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+      event.preventDefault();
+      activate();
+    }
+  });
+
+  // --- Hover solo en equipos con puntero fino --------------------------
+  if (canHover) {
+    root.addEventListener('pointerenter', function () {
+      isHovered = true;
+      if (isGreeting) return;
+      stopIdleTimer();
+      setState('lectura');
+    });
+    root.addEventListener('pointerleave', function () {
+      isHovered = false;
+      if (isGreeting) return;
+      setState('reposo');
+      scheduleIdle();
+    });
+  }
+
+  // --- Solo animar lo que se ve ----------------------------------------
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      inView = entries[0].isIntersecting;
+      if (inView) {
+        scheduleIdle();
+      } else {
+        stopIdleTimer();
+        if (!isGreeting && state === 'lectura') setState('reposo');
+      }
+    }, { threshold: 0.1 });
+    observer.observe(root);
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopIdleTimer();
+    else scheduleIdle();
+  });
+
+  var activityEvents = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'scroll'];
+  activityEvents.forEach(function (name) {
+    window.addEventListener(name, onActivity, { passive: true });
+  });
+
+  // Estado inicial. Las capas nacen sin sprite (un 1x1 transparente) y recien
+  // cuando se sabe si el navegador soporta WebP animado se carga el formato
+  // que corresponde. Asi no se descarga el GIF y despues el WebP.
+  conFormatoBuho(function () {
+    liveSrc(layers[state]);   // la capa activa, ya
+    // El resto se precarga en segundo plano, sin ocupar un <img> del documento.
+    Object.keys(layers).forEach(function (key) {
+      if (key === state) return;
+      var url = urlDe(layers[key]);
+      if (!url) return;
+      var pre = new Image();
+      pre.src = url;
+      warmup.push(pre);
+    });
+    scheduleIdle();
+  });
+}
+
+// ===== BUHO ASISTENTE (FLOTANTE, APARECE AL HACER SCROLL) =====
+function initBuhoAsistente() {
+  // 1. Crear el HTML del asistente dinámicamente
+  var contenedor = document.createElement('div');
+  contenedor.className = 'buho-asistente';
+  contenedor.id = 'buhoAsistente';
   
+  // La primera vez que aparece se presenta; despues rota mensajes.
+  // (El texto que trae el div al crearse no se llega a ver nunca: mostrarAsistente
+  //  lo reemplaza antes de que la burbuja se haga visible.)
+  var SALUDO_INICIAL = 'Soy el Doctor Carpincho, ¿en qué puedo asesorarle?';
+  var primeraAparicion = true;
+
   // Mensajes rotativos con tono profesional
   var messages = [
     "¿Necesita auditar su caso legal hoy?",
@@ -727,25 +1038,177 @@ function initSideRobot() {
     "Estamos en línea para asistirle."
   ];
   
-  // Doctor Carpincho saluda dentro del círculo del avatar.
-  var mascotMarkup = '<span class="doctor-carpincho doctor-carpincho--saludo" role="img" aria-label="Doctor Carpincho, asesor del estudio jurídico"></span>';
+  // Buho asesor, recortado dentro del circulo del avatar.
+  // En reposo usa idle.gif y solo pasa a wave.gif durante el saludo: antes
+  // wave.gif quedaba en bucle permanente, animandose incluso con el asistente
+  // fuera de pantalla.
+  // La extension (.webp o .gif) la decide srcBuho() segun lo que soporte el
+  // navegador, asi que se pide siempre por funcion y nunca se cachea en una
+  // constante: al arrancar todavia puede no estar resuelta.
+  var reduceMotion = prefersReducedMotion();
 
-  robotContainer.innerHTML = 
-    '<div class="side-robot-avatar" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})">' +
-      mascotMarkup +
-      '<div class="side-robot-close" onclick="event.stopPropagation(); hideSideRobot();">✕</div>' +
+  // width/height explicitos: el navegador reserva el espacio y no hay salto
+  // de layout cuando entra el GIF.
+  // Nace aparcado en el 1x1 transparente: el sprite entra cuando se sabe el
+  // formato y cuando el asistente realmente se muestra.
+  var spriteHtml = '<img src="' + OWL_BLANK + '" id="buhoAsistenteSprite" class="buho-asistente-sprite" ' +
+    'width="192" height="208" decoding="async" alt="Doctor Carpincho" />';
+
+  contenedor.innerHTML =
+    '<div class="buho-asistente-avatar" id="buhoAsistenteAvatar" role="button" tabindex="0" aria-label="Doctor Carpincho: ir al diagnóstico con IA">' +
+      spriteHtml +
+      '<div class="buho-asistente-cerrar" id="buhoAsistenteCerrar" role="button" tabindex="0" aria-label="Cerrar al Doctor Carpincho">✕</div>' +
     '</div>' +
-    '<div class="side-robot-bubble" id="sideRobotText" onclick="document.querySelector(\'.diagnostic\').scrollIntoView({behavior: \'smooth\'})" style="cursor:pointer;">Estimado, ¿en qué podemos asesorarle?</div>';
+    '<div class="buho-asistente-burbuja" id="buhoAsistenteMensaje" role="button" tabindex="0">Soy el Doctor Carpincho, ¿en qué puedo asesorarle?</div>';
 
-  document.body.appendChild(robotContainer);
-  initMascotMotion();
+  document.body.appendChild(contenedor);
+
+  // Precarga del saludo para que no espere a la red en el primer toque.
+  var waveWarmup = null;
+  conFormatoBuho(function () {
+    waveWarmup = new Image();
+    waveWarmup.src = srcBuho('wave');
+  });
+
+  // --- Microinteraccion de saludo --------------------------------------
+  var sideGreetTimer = null;
+  var sideGreeting = false;
+  var sidePendiente = null;   // accion de un toque llegado durante otro saludo
+
+  function saludarAsistente(done) {
+    if (document.documentElement.dataset.mascotMotion === 'paused') { if (typeof done === 'function') done(); return; }
+    if (sideGreeting) {
+      // Ya hay un saludo en curso, casi siempre el de bienvenida. Antes el
+      // toque se descartaba entero y el asistente no llevaba a ningun lado:
+      // un toque muerto. Ahora la accion queda pendiente y corre al terminar.
+      if (typeof done === 'function') sidePendiente = done;
+      return;
+    }
+    sideGreeting = true;
+
+    var img = document.getElementById('buhoAsistenteSprite');
+    var targets = [
+      document.getElementById('buhoAsistenteAvatar'),
+      document.getElementById('buhoAsistenteMensaje')
+    ];
+
+    // Cambiar el src reinicia el GIF desde el primer cuadro: el ala se levanta
+    // justo cuando el usuario toca, no en un punto cualquiera del bucle.
+    if (img) img.src = srcBuho('wave');
+    targets.forEach(function (el) {
+      if (!el) return;
+      el.classList.remove('is-greeting');
+      void el.offsetWidth;
+      el.classList.add('is-greeting');
+    });
+
+    clearTimeout(sideGreetTimer);
+    sideGreetTimer = setTimeout(function () {
+      targets.forEach(function (el) { if (el) el.classList.remove('is-greeting'); });
+      if (img) img.src = srcBuho('wave');
+      sideGreeting = false;
+      var pendiente = sidePendiente;
+      sidePendiente = null;
+      // Una sola accion: la propia si la hay, o la que quedo encolada.
+      if (typeof done === 'function') done();
+      else if (typeof pendiente === 'function') pendiente();
+    }, OWL_GREET_MS);
+  }
+
+  function goToDiagnostic() {
+    var target = document.querySelector('.diagnostic');
+    if (target) target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth' });
+  }
+
+  // --- Interaccion: click y touchstart, con la misma proteccion contra el
+  //     click sintetico que dispara el navegador tras un toque.
+  var ultimoToqueAsistente = 0;
+
+  function activarAsistente() {
+    // Si el usuario interactuó, se cancela el auto-ocultado para que el saludo
+    // no quede cortado a mitad de camino.
+    clearTimeout(scrollHideTimer);
+    saludarAsistente(goToDiagnostic);
+  }
+
+  ['buhoAsistenteAvatar', 'buhoAsistenteMensaje'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+
+    el.addEventListener('touchstart', function () {
+      ultimoToqueAsistente = Date.now();
+      activarAsistente();
+    }, { passive: true });
+
+    el.addEventListener('click', function () {
+      if (Date.now() - ultimoToqueAsistente < 900) return;
+      activarAsistente();
+    });
+
+    el.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        activarAsistente();
+      }
+    });
+  });
+
+  var closeBtn = document.getElementById('buhoAsistenteCerrar');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function (event) {
+      event.stopPropagation();
+      cerrarAsistente();
+    });
+    closeBtn.addEventListener('touchstart', function (event) {
+      event.stopPropagation();
+    }, { passive: true });
+    closeBtn.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+        event.preventDefault();
+        event.stopPropagation();
+        cerrarAsistente();
+      }
+    });
+  }
 
   // 2. Lógica de aparición basada en scroll
-  var sideRobotVisible = false;
-  var sideRobotCooldown = false;
+  var asistenteVisible = false;
+  var asistenteEnEspera = false;
   var scrollHideTimer = null;
-  var robotCooldownTimer = null;
+  var esperaTimer = null;
+  var greetOnEnterTimer = null;
+  var sideParkTimer = null;
+  // El asistente estorba: el buho grande esta en la franja central, o la
+  // persona llego al cierre de la pagina.
+  var buhoDoctorEstorba = false;
   var lastMsgIndex = -1;
+
+  // Al ocultarse se cancela cualquier saludo pendiente y, una vez terminada la
+  // salida, se aparca el GIF. El asistente vive siempre en el DOM: sin esto se
+  // quedaba animando fuera de pantalla todo el tiempo, gastando bateria para
+  // nadie. Ocultarlo por CSS no basta, hay que soltar el GIF.
+  function detenerAnimacionAsistente() {
+    clearTimeout(greetOnEnterTimer);
+    clearTimeout(sideGreetTimer);
+    clearTimeout(sideParkTimer);
+    sideGreeting = false;
+    sidePendiente = null;
+    ['buhoAsistenteAvatar', 'buhoAsistenteMensaje'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('is-greeting');
+    });
+    sideParkTimer = setTimeout(function () {
+      var img = document.getElementById('buhoAsistenteSprite');
+      if (img && !asistenteVisible) img.src = OWL_BLANK;
+    }, 750); // dura lo mismo que la transicion de salida
+  }
+
+  // Vuelve a poner el GIF de reposo antes de que el asistente entre en pantalla.
+  function reanudarAnimacionAsistente() {
+    clearTimeout(sideParkTimer);
+    var img = document.getElementById('buhoAsistenteSprite');
+    if (img && img.getAttribute('src') !== srcBuho('wave')) img.src = srcBuho('wave');
+  }
 
   function getRandomMsg() {
     var idx;
@@ -754,30 +1217,50 @@ function initSideRobot() {
     return messages[idx];
   }
 
-  function showSideRobot() {
-    if (sideRobotVisible || sideRobotCooldown) return;
-    var el = document.getElementById('sideRobot');
-    var textEl = document.getElementById('sideRobotText');
+  function mostrarAsistente() {
+    if (asistenteVisible || asistenteEnEspera || buhoDoctorEstorba) return;
+    var el = document.getElementById('buhoAsistente');
+    var textEl = document.getElementById('buhoAsistenteMensaje');
     if (!el) return;
     
-    if (textEl) textEl.textContent = getRandomMsg();
+    if (textEl) textEl.textContent = primeraAparicion ? SALUDO_INICIAL : getRandomMsg();
+    primeraAparicion = false;
+    reanudarAnimacionAsistente();
     el.classList.add('visible');
-    sideRobotVisible = true;
+    asistenteVisible = true;
+
+    // Saluda una vez al terminar de entrar. Reemplaza al bucle permanente de
+    // wave.gif: mismo gesto, pero sin animar nada el resto del tiempo.
+    clearTimeout(greetOnEnterTimer);
+    greetOnEnterTimer = setTimeout(function () {
+      if (asistenteVisible) saludarAsistente();
+    }, 750);
 
     // Se esconde automáticamente después de 10 segundos
     clearTimeout(scrollHideTimer);
     scrollHideTimer = setTimeout(function() {
-      hideSideRobotAuto();
+      ocultarAsistenteAuto();
     }, 10000);
   }
 
-  function hideSideRobotAuto() {
-    var el = document.getElementById('sideRobot');
+  function ocultarAsistenteAuto() {
+    var el = document.getElementById('buhoAsistente');
     if (el) el.classList.remove('visible');
-    sideRobotVisible = false;
-    sideRobotCooldown = true;
-    clearTimeout(robotCooldownTimer);
-    robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 10000);
+    asistenteVisible = false;
+    detenerAnimacionAsistente();
+    asistenteEnEspera = true;
+    clearTimeout(esperaTimer);
+    esperaTimer = setTimeout(function() { asistenteEnEspera = false; }, 10000);
+  }
+
+  // Se oculta sin castigo: a diferencia de ocultarAsistenteAuto, no activa el
+  // periodo de espera, asi que el asistente vuelve apenas se libera el espacio.
+  function ocultarAsistentePorEstorbo() {
+    var el = document.getElementById('buhoAsistente');
+    if (el) el.classList.remove('visible');
+    asistenteVisible = false;
+    detenerAnimacionAsistente();
+    clearTimeout(scrollHideTimer);
   }
 
   // Mostrar al hacer scroll pasado cierto punto (300px)
@@ -788,22 +1271,75 @@ function initSideRobot() {
     clearTimeout(scrollDebounce);
     scrollDebounce = setTimeout(function() {
       if (window.scrollY > scrollThreshold) {
-        showSideRobot();
+        mostrarAsistente();
       } else {
         // Si vuelve arriba, ocultarlo suavemente
-        hideSideRobotAuto();
+        ocultarAsistenteAuto();
       }
     }, 200);
   }, { passive: true });
 
+  // El asistente flotante vive a media altura sobre el margen izquierdo, y a
+  // 393px de ancho eso cae justo encima del buho grande: le robaba el toque y
+  // la microinteraccion de saludo no llegaba a dispararse nunca.
+  //
+  // Se aparta lo MINIMO indispensable. Dos decisiones para lograrlo:
+  //   1. Se vigila solo al buho grande, no la seccion de diagnostico entera.
+  //      Vigilar la seccion dejaba al asistente sin aparecer en todo ese tramo.
+  //   2. El rootMargin negativo recorta la zona de observacion a la franja
+  //      central de la pantalla, que es la unica altura donde el asistente
+  //      realmente esta. Asi el asistente solo cede el paso cuando de verdad se
+  //      superponen, y no cada vez que el buho asoma por un borde.
+  //
+  // Y hay una segunda zona donde sobra por un motivo distinto: el final de la
+  // pagina. Quien llego al formulario de contacto o al pie ya decidio
+  // escribirnos; ahi el asistente no invita a nada, solo se apoya encima del
+  // contenido. Se retira hasta que la persona vuelva a subir.
+  var zonasQueEstorba = [];
+
+  function agregarZona(selector, margen) {
+    var el = document.querySelector(selector);
+    if (!el) return;
+    var estado = { estorba: false };
+    zonasQueEstorba.push(estado);
+    new IntersectionObserver(function (entries) {
+      estado.estorba = entries[0].isIntersecting;
+      revisarEstorbo();
+    }, { threshold: 0, rootMargin: margen }).observe(el);
+  }
+
+  function revisarEstorbo() {
+    buhoDoctorEstorba = diagnosticoEnCurso ||
+      zonasQueEstorba.some(function (z) { return z.estorba; });
+    if (buhoDoctorEstorba) {
+      if (asistenteVisible) ocultarAsistentePorEstorbo();
+    } else if (window.scrollY > scrollThreshold) {
+      mostrarAsistente();   // ya no estorba: puede volver
+    }
+  }
+
+  // Que el diagnostico pueda avisar cuando arranca y cuando se reinicia.
+  alCambiarDiagnostico = revisarEstorbo;
+
+  if ('IntersectionObserver' in window) {
+    // El buho grande: solo cuando cae en la franja central, que es la unica
+    // altura donde el asistente realmente esta.
+    agregarZona('#buhoDoctor', '-42% 0px -42% 0px');
+    // El cierre de la pagina: apenas asoma, el asistente se va.
+    agregarZona('#cta-final', '0px');
+    agregarZona('#contacto', '0px');
+    agregarZona('.footer', '0px');
+  }
+
   // Función global para ocultarlo manualmente (con la X) — tiene acceso al closure
-  window.hideSideRobot = function() {
-    var el = document.getElementById('sideRobot');
+  cerrarAsistente = function() {
+    var el = document.getElementById('buhoAsistente');
     if (el) el.classList.remove('visible');
-    sideRobotVisible = false;
-    sideRobotCooldown = true;
-    clearTimeout(robotCooldownTimer);
-    robotCooldownTimer = setTimeout(function() { sideRobotCooldown = false; }, 30000);
+    asistenteVisible = false;
+    detenerAnimacionAsistente();
+    asistenteEnEspera = true;
+    clearTimeout(esperaTimer);
+    esperaTimer = setTimeout(function() { asistenteEnEspera = false; }, 30000);
   };
 }
 
@@ -821,7 +1357,8 @@ var questions = [
       { label: 'Inmobiliario', icon: '\uD83C\uDFE0' },
       { label: 'Rural', icon: '\uD83C\uDF3E' },
       { label: 'Sucesiones', icon: '\uD83D\uDCDC' },
-      { label: 'Accidente de tránsito', icon: '\uD83D\uDE97' }
+      { label: 'Accidente de tránsito', icon: '\uD83D\uDE97' },
+      { label: 'Penal', icon: '\uD83D\uDEE1\uFE0F' }
     ]
   },
   {
@@ -842,13 +1379,23 @@ var questions = [
 
 var EXPRESS_FLOW = {
   area: {
-    question: 'El robot pregunta: ¿Qué área legal requiere auditoría?',
+    question: 'El Doctor Carpincho pregunta: ¿Qué área legal requiere auditoría?',
     options: [
       { value: 'laboral', label: 'Laboral' },
       { value: 'sucesiones', label: 'Sucesiones' },
       { value: 'inmobiliario', label: 'Inmobiliario' },
       { value: 'ejecuciones', label: 'Ejecuciones' },
-      { value: 'transito', label: 'Accidente de tránsito' }
+      { value: 'transito', label: 'Accidente de tránsito' },
+      { value: 'penal', label: 'Penal' }
+    ]
+  },
+  penal_situacion: {
+    question: '¿Cuál es su situación en el caso penal?',
+    options: [
+      { value: 'imputado', label: 'Estoy imputado o denunciado' },
+      { value: 'detenido', label: 'Hay una persona detenida' },
+      { value: 'citacion', label: 'Recibí una citación judicial' },
+      { value: 'victima', label: 'Soy víctima de un delito' }
     ]
   },
   laboral_role: {
@@ -955,8 +1502,8 @@ var expressState = {
 
 var TYPING_DELAY = 700;
 
-function pulseRobot() {
-  var el = document.querySelector('.diagnostic-robot');
+function pulsarBuho() {
+  var el = document.querySelector('.buho-doctor');
   if (!el) return;
   el.classList.remove('pulse');
   void el.offsetWidth;
@@ -1026,6 +1573,7 @@ function showStep(stepNum) {
 }
 
 function startDiagnostic() {
+  marcarDiagnostico(true);
   diagnosticState.step = 1;
   diagnosticState.answers = [];
   renderQuestion(1);
@@ -1068,7 +1616,7 @@ function renderQuestion(stepNum) {
         optionsHTML +
       '</div>';
 
-    pulseRobot();
+    pulsarBuho();
   }, TYPING_DELAY);
 }
 
@@ -1157,6 +1705,7 @@ function renderResult() {
       '<h3 class="font-serif text-white" style="font-size:1.5rem;font-weight:700;margin-bottom:0.75rem;">Auditoría completa finalizada.</h3>' +
       '<p class="text-muted text-base" style="line-height:1.65;margin-bottom:0.5rem;">Detectamos <strong style="color:#d4af37;">rutas de acción viables</strong> con potencial estratégico para su situación legal.</p>' +
       '<p class="text-light-gray text-sm" style="margin-bottom:1.5rem;">Comparta su caso por WhatsApp para recibir la recomendación priorizada y próximos pasos.</p>' +
+      buildCapturaHTML('capturaCompleto') +
       '<div class="result-buttons">' +
         '<a href="' + WA_LINK + '" target="_blank" rel="noopener noreferrer" class="btn-gold-solid">Solicitar análisis por WhatsApp</a>' +
         '<button class="btn-reset" onclick="resetDiagnostic()">Reiniciar diagnóstico completo</button>' +
@@ -1165,6 +1714,7 @@ function renderResult() {
 }
 
 function resetDiagnostic() {
+  marcarDiagnostico(false);
   diagnosticState.step = 0;
   diagnosticState.answers = [];
   if (diagnosticState.processingTimer) {
@@ -1195,6 +1745,7 @@ function showExpressStep(stepNum) {
 }
 
 function resetExpressDiagnostic() {
+  marcarDiagnostico(false);
   expressState.step = 0;
   expressState.currentQuestionId = 'area';
   expressState.areaKey = null;
@@ -1224,6 +1775,7 @@ function resetExpressDiagnostic() {
 }
 
 function startExpressDiagnostic() {
+  marcarDiagnostico(true);
   expressState.currentQuestionId = 'area';
   expressState.history = [];
   expressState.step = 1;
@@ -1297,7 +1849,7 @@ function renderExpressQuestion(questionId) {
         optionsHTML +
       '</div>';
 
-    pulseRobot();
+    pulsarBuho();
   }, TYPING_DELAY);
 }
 
@@ -1333,6 +1885,9 @@ function getNextExpressQuestionId(questionId, optionValue) {
     if (optionValue === 'transito') {
       return 'transito_need';
     }
+    if (optionValue === 'penal') {
+      return 'penal_situacion';
+    }
   }
 
   if (questionId === 'laboral_role') {
@@ -1349,7 +1904,8 @@ function getNextExpressQuestionId(questionId, optionValue) {
     questionId === 'sucesiones_status' ||
     questionId === 'inmobiliario_need' ||
     questionId === 'transito_need' ||
-    questionId === 'ejecuciones_need'
+    questionId === 'ejecuciones_need' ||
+    questionId === 'penal_situacion'
   ) {
     return 'urgency';
   }
@@ -1384,7 +1940,7 @@ function handleExpressOptionSelect(optionValue) {
   } else if (qid === 'laboral_role') {
     expressState.roleKey = optionValue;
     expressState.roleLabel = selectedLabel;
-  } else if (qid === 'laboral_worker_conflict' || qid === 'laboral_employer_conflict' || qid === 'sucesiones_status' || qid === 'inmobiliario_need' || qid === 'transito_need') {
+  } else if (qid === 'laboral_worker_conflict' || qid === 'laboral_employer_conflict' || qid === 'sucesiones_status' || qid === 'inmobiliario_need' || qid === 'transito_need' || qid === 'penal_situacion') {
     expressState.primaryLabel = selectedLabel;
   } else if (qid === 'ejecuciones_type') {
     expressState.executionTypeLabel = selectedLabel;
@@ -1525,6 +2081,20 @@ function getExpressCaseSummary() {
       return 'Su caso involucra ejecución de alquileres adeudados. Se tramitará el cobro judicial de la deuda y, de corresponder, el desalojo de forma simultánea.';
     return 'Su caso de ejecución requiere análisis del título ejecutivo, identificación de bienes del deudor y selección de la vía procesal más expedita en Chaco.';
   }
+  // En materia penal el texto se mantiene deliberadamente prudente: se informa
+  // sobre derechos y plazos, sin anticipar resultados ni calificar la conducta.
+  // Lo que define el caso es la intervencion temprana de un defensor.
+  if (area === 'penal') {
+    if (primary.indexOf('detenida') !== -1)
+      return 'Hay una persona privada de la libertad: es el escenario más urgente. Corresponde intervención inmediata para controlar la legalidad de la detención, asistir a la persona detenida y plantear ante el juzgado los pedidos que correspondan a su situación procesal.';
+    if (primary.indexOf('imputado') !== -1 || primary.indexOf('denunciado') !== -1)
+      return 'Está imputado o denunciado. Tiene derecho a designar abogado defensor desde el primer momento y a negarse a declarar sin que eso lo perjudique. Lo que se declare sin asistencia letrada puede condicionar el resto del proceso, por eso conviene intervenir antes de cualquier acto.';
+    if (primary.indexOf('citación') !== -1 || primary.indexOf('citacion') !== -1)
+      return 'Recibió una citación judicial. En materia penal los plazos son breves y perentorios, y presentarse sin defensa técnica puede comprometer su situación procesal. Lo primero es identificar en qué carácter se lo cita y qué se le atribuye.';
+    if (primary.indexOf('víctima') !== -1 || primary.indexOf('victima') !== -1)
+      return 'Es víctima de un delito. Además de la denuncia, puede constituirse como querellante para impulsar la investigación y ser parte del proceso, en lugar de depender únicamente del avance de la fiscalía.';
+    return 'Su caso penal requiere análisis de la etapa procesal, la prueba reunida y la estrategia de defensa o de impulso de la investigación, según el carácter en que intervenga.';
+  }
   return 'Su caso requiere análisis jurídico personalizado para determinar la mejor estrategia de acción disponible en la jurisdicción de Chaco.';
 }
 
@@ -1565,6 +2135,21 @@ function getExpressDocsNeeded() {
       return ['Pagaré / cheque original', 'Acta de protesto notarial', 'Domicilio del deudor', 'CUIT del deudor (si disponible)'];
     return ['Título ejecutivo original', 'Domicilio del deudor', 'CUIT / CUIL del deudor'];
   }
+  if (area === 'penal') {
+    var penal = ['DNI de la persona involucrada', 'Datos de la causa: número de expediente, fiscalía o juzgado interviniente'];
+    if (primary.indexOf('detenida') !== -1) {
+      penal.push('Lugar exacto donde se encuentra detenida');
+      penal.push('Acta de detención o constancia policial, si se entregó copia');
+    } else if (primary.indexOf('citación') !== -1 || primary.indexOf('citacion') !== -1) {
+      penal.push('Cédula de notificación o citación recibida');
+    } else if (primary.indexOf('víctima') !== -1 || primary.indexOf('victima') !== -1) {
+      penal.push('Copia de la denuncia realizada');
+      penal.push('Certificados médicos, fotografías u otra prueba del hecho');
+    } else {
+      penal.push('Copia de la denuncia o de la imputación, si la tiene');
+    }
+    return penal;
+  }
   return ['DNI del consultante', 'Documentación vinculada al caso'];
 }
 
@@ -1574,9 +2159,130 @@ function getExpressStats() {
     sucesiones:   { total: 5, viable: 1 },
     inmobiliario: { total: 7, viable: 2 },
     transito:     { total: 6, viable: 1 },
-    ejecuciones:  { total: 4, viable: 1 }
+    ejecuciones:  { total: 4, viable: 1 },
+    penal:        { total: 6, viable: 2 }
   };
   return map[expressState.areaKey] || { total: 6, viable: 1 };
+}
+
+// ===== CAPTURA DE CONTACTO AL CERRAR EL DIAGNOSTICO =====
+// Quien llega hasta el resultado acaba de contar su problema legal: es el
+// momento de mayor intencion de toda la web. Antes lo unico que se le ofrecia
+// era un boton de WhatsApp y, si no lo tocaba, no quedaba ningun rastro de que
+// habia estado ni de que necesitaba. Este bloque recupera esos casos.
+//
+// Se piden solo dos datos, y el telefono antes que el correo, porque el canal
+// real del estudio es WhatsApp. Cuantos menos campos, mas gente lo completa.
+function buildCapturaHTML(formId) {
+  return '' +
+    '<form class="captura" id="' + formId + '" onsubmit="enviarCaptura(event)" novalidate>' +
+      '<p class="captura-titulo">¿Quiere que un abogado revise su caso?</p>' +
+      '<p class="captura-sub">Déjenos sus datos y nos comunicamos a la brevedad.</p>' +
+      // Trampa para robots: invisible para las personas, irresistible para un bot.
+      '<input type="text" name="website" class="captura-honey" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
+      '<div class="captura-campos">' +
+        '<input type="text" name="nombre" placeholder="Su nombre" autocomplete="name" required />' +
+        '<input type="tel" name="telefono" placeholder="Teléfono / WhatsApp" autocomplete="tel" inputmode="tel" required />' +
+      '</div>' +
+      '<button type="submit" class="btn-gold-solid captura-btn">Solicitar que me contacten</button>' +
+      '<p class="captura-estado" role="status" aria-live="polite"></p>' +
+    '</form>';
+}
+
+// Resume las respuestas del diagnostico para que el estudio sepa de que se
+// trata el caso antes de devolver la llamada.
+function resumenDiagnosticoActivo() {
+  var partes = [];
+  var panel = document.querySelector('.ia-panel:not(.is-hidden)');
+  var esExpress = !panel || panel.id === 'iaPanelExpress';
+
+  if (esExpress) {
+    if (expressState.areaLabel) partes.push('Área: ' + expressState.areaLabel);
+    if (expressState.primaryLabel) partes.push(expressState.primaryLabel);
+    if (expressState.urgencyLabel) partes.push('Urgencia: ' + expressState.urgencyLabel);
+    if (expressState.docsLabel) partes.push('Documentación: ' + expressState.docsLabel);
+  } else if (diagnosticState && diagnosticState.answers && diagnosticState.answers.length) {
+    partes = diagnosticState.answers.slice();
+  }
+
+  return (esExpress ? 'Diagnóstico Express' : 'Diagnóstico Completo') +
+    (partes.length ? ' — ' + partes.join(' · ') : '');
+}
+
+function enviarCaptura(e) {
+  e.preventDefault();
+
+  var form = e.target;
+  var btn = form.querySelector('.captura-btn');
+  var estado = form.querySelector('.captura-estado');
+  var campoNombre = form.querySelector('[name="nombre"]');
+  var campoTel = form.querySelector('[name="telefono"]');
+
+  var nombre = String(campoNombre ? campoNombre.value : '').trim();
+  var telefono = String(campoTel ? campoTel.value : '').trim();
+  var honey = String((form.querySelector('[name="website"]') || {}).value || '').trim();
+
+  function fallar(mensaje, campo) {
+    if (estado) {
+      estado.textContent = mensaje;
+      estado.className = 'captura-estado error';
+    }
+    if (campo && campo.focus) campo.focus();
+  }
+
+  if (nombre.length < 2) { fallar('Por favor ingrese su nombre.', campoNombre); return; }
+  if (telefono.replace(/\D/g, '').length < 6) {
+    fallar('Ingrese un teléfono válido para poder contactarlo.', campoTel);
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  if (estado) { estado.textContent = ''; estado.className = 'captura-estado'; }
+
+  var resumen = resumenDiagnosticoActivo();
+
+  // El correo sale por el mismo camino que ya usa el formulario de contacto.
+  // Es accesorio: si falla, la consulta igual quedo registrada en el servidor.
+  try {
+    fetch(CONTACT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        access_key: CONTACT_ACCESS_KEY,
+        subject: 'Diagnóstico IA — ' + nombre + ' (' + telefono + ')',
+        from_name: 'Web Juridico',
+        botcheck: honey ? true : false,
+        Nombre: nombre,
+        Telefono: telefono,
+        Consulta: resumen
+      }),
+      keepalive: true
+    }).catch(function () {});
+  } catch (error) { /* sin efecto para el visitante */ }
+
+  registrarConsulta({
+    origen: 'diagnostico',
+    nombre: nombre,
+    telefono: telefono,
+    diagnostico: resumen,
+    website: honey
+  }).then(function (r) {
+    if (r.ok) {
+      registrarEvento('lead_diagnostico', { origen: 'diagnostico' });
+      form.innerHTML =
+        '<p class="captura-titulo">✓ Recibimos su consulta</p>' +
+        '<p class="captura-sub">Nos comunicamos con usted a la brevedad. ' +
+        'Si prefiere, puede escribirnos ahora mismo por WhatsApp.</p>';
+      form.classList.add('captura-ok');
+      return;
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Solicitar que me contacten'; }
+    // El limite de intentos no es un fallo: conviene decir la verdad para que
+    // la persona no crea que el sitio esta roto y se vaya.
+    fallar(r.limite
+      ? (r.mensaje || 'Ya registramos varias consultas suyas. Aguarde unos minutos o escríbanos por WhatsApp.')
+      : 'No pudimos registrar su consulta. Escríbanos por WhatsApp y lo atendemos igual.');
+  });
 }
 
 function renderExpressResult() {
@@ -1612,6 +2318,7 @@ function renderExpressResult() {
         '<span class="result-stats-number">' + stats.total + '</span>' +
         '<span class="result-stats-text">casos similares analizados<br><strong>' + rutasText + ' detectada' + (stats.viable > 1 ? 's' : '') + '</strong> para esta situación</span>' +
       '</div>' +
+      buildCapturaHTML('capturaExpress') +
       '<div class="result-buttons">' +
         '<a href="' + waLink + '" target="_blank" rel="noopener noreferrer" class="btn-gold-solid">Continuar por WhatsApp</a>' +
         '<button type="button" class="btn-reset" onclick="resetExpressDiagnostic()">Nuevo diagnóstico</button>' +
@@ -1652,20 +2359,59 @@ document.addEventListener('click', function (e) {
   }
 });
 
-// Aviso interno por WhatsApp. Es accesorio: se dispara despues de que la
-// consulta ya salio por correo y cualquier fallo se ignora en silencio.
-function notifyWhatsapp(nombre, email, consulta) {
+// ===== REGISTRO DE LA CONSULTA EN NUESTRO PROPIO SERVIDOR =====
+// Web3Forms entrega el correo, pero es un servicio externo: si esta caido, si
+// se agoto el cupo mensual, si un bloqueador de publicidad corta la peticion o
+// si al visitante se le cae la senal, la consulta no queda en ningun lado y el
+// estudio nunca se entera de que existio.
+//
+// Por eso toda consulta se registra primero contra /api/consultas, que la
+// guarda en el servidor y dispara los avisos por su cuenta. Web3Forms sigue
+// funcionando igual, pero ya no es el unico camino.
+//
+// Devuelve una promesa que NUNCA se rechaza: el registro es una red de
+// seguridad y no debe romper el envio si algo sale mal.
+function registrarConsulta(datos) {
+  var payload = {
+    origen: datos.origen || 'formulario',
+    nombre: datos.nombre || '',
+    email: datos.email || '',
+    telefono: datos.telefono || '',
+    consulta: datos.consulta || '',
+    diagnostico: datos.diagnostico || '',
+    website: datos.website || ''
+  };
+
   try {
-    fetch('/api/aviso-whatsapp', {
+    return fetch('/api/consultas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nombre: nombre, email: email, consulta: consulta }),
+      body: JSON.stringify(payload),
       keepalive: true
-    }).catch(function () {});
+    })
+      .then(function (res) {
+        return res.json()
+          .catch(function () { return {}; })
+          .then(function (data) {
+            return {
+              ok: !!(data && data.ok),
+              guardada: !!(data && data.guardada),
+              limite: res.status === 429,
+              mensaje: (data && data.message) || ''
+            };
+          });
+      })
+      .catch(function () { return { ok: false, guardada: false, limite: false, mensaje: '' }; });
   } catch (error) {
-    // sin efecto para el visitante
+    return Promise.resolve({ ok: false, guardada: false, limite: false, mensaje: '' });
   }
 }
+
+// El aviso interno por WhatsApp lo dispara ahora el propio /api/consultas al
+// registrar la consulta, asi que desde el navegador ya no se llama a
+// /api/aviso-whatsapp. Sale mejor: antes el aviso dependia de que Web3Forms
+// respondiera bien, y si ese servicio fallaba el estudio no se enteraba de
+// nada. El endpoint del servidor sigue disponible por compatibilidad.
 
 function handleContactSubmit(e) {
   e.preventDefault();
@@ -1694,6 +2440,16 @@ function handleContactSubmit(e) {
   var email = String(formData.get('email') || '').trim();
   var consulta = String(formData.get('consulta') || '').trim();
   var honeypot = String(formData.get('website') || formData.get('_honey') || '').trim();
+
+  // Se registra ANTES de intentar el envio externo: si Web3Forms falla, la
+  // consulta ya quedo guardada en nuestro servidor y el estudio igual se entera.
+  registrarConsulta({
+    origen: 'formulario',
+    nombre: nombre,
+    email: email,
+    consulta: consulta,
+    website: honeypot
+  });
 
   // El envio va directo desde el navegador a Web3Forms: el plan gratuito solo
   // acepta solicitudes del lado del cliente. La access key es publica por diseno.
@@ -1743,7 +2499,9 @@ function handleContactSubmit(e) {
           status.classList.add('success');
         }
         registrarEvento('generate_lead', { method: 'formulario_contacto' });
-        notifyWhatsapp(nombre, email, consulta);
+        // El aviso por WhatsApp ya lo dispara /api/consultas al registrar la
+        // consulta, mas arriba. Avisar de nuevo aca mandaria dos mensajes
+        // iguales al estudio y gastaria dos cupos del limite de intentos.
         form.reset();
       } else {
         // La respuesta de error del servicio viene en ingles: se muestra un

@@ -3,3 +3,5 @@ cloudflare-worker/.wrangler/
 .env
 npm-debug.log*
 data/visits.json
+# Consultas de clientes reales: datos personales, nunca al repositorio.
+data/consultas.jsonl
